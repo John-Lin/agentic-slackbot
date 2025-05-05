@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from agentize.agents.summary import get_summary_agent
 from agents import Agent
 from agents import Runner
 from agents.mcp import MCPServerStdio
@@ -15,7 +16,15 @@ class OpenAIAgent:
     """A wrapper for OpenAI Agent"""
 
     def __init__(self, name: str, mcp_servers: list | None = None) -> None:
-        self.current_agent = Agent(
+        self.model = get_openai_model()
+        self.model_settings = get_openai_model_settings()
+        self.summary_agent = get_summary_agent(
+            lang="台灣中文",
+            length=1_000,
+            model=self.model,
+            model_settings=self.model_settings,
+        )
+        self.main_agent = Agent(
             name=name,
             instructions="""
             You are a helpful Slack bot assistant. When responding, you must
@@ -24,10 +33,12 @@ class OpenAIAgent:
             Slack. Ensure that all output strictly complies with Slack’s `mrkdwn`
             specifications. Keep your responses readable and concise. Use English
             language for all responses. If you need to use Mandarin, please use
-            Traditional Chinese (台灣繁體中文).
+            Traditional Chinese (台灣繁體中文). Handoff to the summary agent when you need to summarize.
             """,
-            model=get_openai_model(),
-            model_settings=get_openai_model_settings(),
+            model=self.model,
+            model_settings=self.model_settings,
+            # tools=[scrape_tool, map_tool, search_tool],
+            handoffs=[self.summary_agent],
             mcp_servers=(mcp_servers if mcp_servers is not None else []),
         )
         self.name = name
@@ -48,7 +59,7 @@ class OpenAIAgent:
         return cls(name, mcp_servers)
 
     async def connect(self) -> None:
-        for mcp_server in self.current_agent.mcp_servers:
+        for mcp_server in self.main_agent.mcp_servers:
             try:
                 await mcp_server.connect()
                 logging.info(f"Server {mcp_server.name} connecting")
@@ -57,13 +68,13 @@ class OpenAIAgent:
 
     async def run(self, messages: list) -> str:
         """Run a workflow starting at the given agent."""
-        result = await Runner.run(self.current_agent, input=messages)
+        result = await Runner.run(self.main_agent, input=messages)
         return result.final_output
 
     async def cleanup(self) -> None:
         """Clean up resources."""
         # Clean up servers
-        for mcp_server in self.current_agent.mcp_servers:
+        for mcp_server in self.main_agent.mcp_servers:
             try:
                 await mcp_server.cleanup()
                 logging.info(f"Server {mcp_server.name} cleaned up")

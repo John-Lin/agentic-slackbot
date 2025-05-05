@@ -101,10 +101,10 @@ class SlackMCPBot:
             agent_resp = await self.agent.run(messages)
 
             # Add assistant response to conversation history
-            self.conversations[channel]["messages"].append({"role": "assistant", "content": agent_resp})
+            self.conversations[channel]["messages"].append({"role": "assistant", "content": str(agent_resp)})
 
             # Send the response to the user
-            await say(text=agent_resp, channel=channel, thread_ts=thread_ts)
+            await say(text=str(agent_resp), channel=channel, thread_ts=thread_ts)
 
         except Exception as e:
             error_message = f"I'm sorry, I encountered an error: {str(e)}"
