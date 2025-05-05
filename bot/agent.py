@@ -4,25 +4,20 @@ import logging
 from typing import Any
 
 from agentize.agents.summary import get_summary_agent
+from agentize.model import get_openai_model
+from agentize.model import get_openai_model_settings
 from agents import Agent
 from agents import Runner
 from agents.mcp import MCPServerStdio
-
-from .model import get_openai_model
-from .model import get_openai_model_settings
 
 
 class OpenAIAgent:
     """A wrapper for OpenAI Agent"""
 
     def __init__(self, name: str, mcp_servers: list | None = None) -> None:
-        self.model = get_openai_model()
-        self.model_settings = get_openai_model_settings()
         self.summary_agent = get_summary_agent(
             lang="台灣中文",
             length=1_000,
-            model=self.model,
-            model_settings=self.model_settings,
         )
         self.main_agent = Agent(
             name=name,
@@ -35,8 +30,8 @@ class OpenAIAgent:
             language for all responses. If you need to use Mandarin, please use
             Traditional Chinese (台灣繁體中文). Handoff to the summary agent when you need to summarize.
             """,
-            model=self.model,
-            model_settings=self.model_settings,
+            model=get_openai_model(),
+            model_settings=get_openai_model_settings(),
             # tools=[scrape_tool, map_tool, search_tool],
             handoffs=[self.summary_agent],
             mcp_servers=(mcp_servers if mcp_servers is not None else []),
