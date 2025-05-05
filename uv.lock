@@ -45,7 +45,7 @@ dev = [
 
 [[package]]
 name = "agentize"
-version = "0.0.9"
+version = "0.0.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "firecrawl-py" },
@@ -53,7 +53,7 @@ dependencies = [
     { name = "openai-agents" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/f8/4c5aa4e6f346c4aa1c17b707be2d57f2045c0152e1ac1f4a1f5fb7f1d225/agentize-0.0.9-py3-none-any.whl", hash = "sha256:d848228d3b38995e025801a18973d7981b8468b2d6cf586bb110c336f7edefa7", size = 9498, upload-time = "2025-05-05T04:46:30.817Z" },
+    { url = "https://files.pythonhosted.org/packages/99/19/d5f4ef8a093659cfc508de227246f921990d17209fc0bd3ca9a080a7699a/agentize-0.0.10-py3-none-any.whl", hash = "sha256:6dc77cb42e336ee776b0733cafaffe65de75e1496a6ddb0369a73583568ea05a", size = 10587, upload-time = "2025-05-05T17:00:06.987Z" },
 ]
 
 [[package]]
