@@ -7,7 +7,6 @@ A simple Slack bot that uses the OpenAI Agents SDK to interact with the Model Co
 uv sync
 ```
 
-
 ## Environment Variables
 
 Create a `.envrc` file in the root directory of the project and add the following environment variables:
@@ -33,6 +32,20 @@ OPENAI_API_VERSION="2024-12-01-preview"
 ```bash
 uv run bot
 ``````
+
+Running the bot in docker
+
+```bash
+docker build . -t telegram-bot
+
+docker run -e SLACK_BOT_TOKEN="" \
+    -e SLACK_APP_TOKEN="" \
+    -e HTTP_PROXY="" \
+    -e OPENAI_PROXY_BASE_URL="" \
+    -e OPENAI_PROXY_API_KEY="" \
+    -e OPENAI_MODEL=gpt-4o \
+    -e FIRECRAWL_API_URL="" telegram-bot
+```
 
 ## Credit
 
