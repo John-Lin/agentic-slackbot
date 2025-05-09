@@ -24,7 +24,7 @@ If you are using Azure OpenAI, you can set the following environment variables i
 AZURE_OPENAI_API_KEY=""
 AZURE_OPENAI_ENDPOINT="https://<myopenai>.azure.com/"
 OPENAI_MODEL="gpt-4o"
-OPENAI_API_VERSION="2024-12-01-preview"
+AZURE_OPENAI_API_VERSION="2025-03-01-preview"
 ```
 
 ## Running the Bot
@@ -36,7 +36,7 @@ uv run bot
 Running the bot in docker
 
 ```bash
-docker build . -t telegram-bot
+docker build . -t slackbot
 
 docker run -e SLACK_BOT_TOKEN="" \
     -e SLACK_APP_TOKEN="" \
@@ -44,7 +44,7 @@ docker run -e SLACK_BOT_TOKEN="" \
     -e OPENAI_PROXY_BASE_URL="" \
     -e OPENAI_PROXY_API_KEY="" \
     -e OPENAI_MODEL=gpt-4o \
-    -e FIRECRAWL_API_URL="" telegram-bot
+    -e FIRECRAWL_API_URL="" slackbot
 ```
 
 ## Credit
