@@ -8,7 +8,7 @@ from slack_sdk.web.async_client import AsyncWebClient
 
 from .agent import OpenAIAgent
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class SlackMCPBot:

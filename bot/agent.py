@@ -13,26 +13,30 @@ from agents import Agent
 from agents import Runner
 from agents.mcp import MCPServerStdio
 
+INSTRUCTIONS = """
+You are agentic Slack bot, a helpful assistant.
+When responding, you must strictly use Slack’s `mrkdwn` formatting syntax only.
+Do not generate headings (`#`), tables, or any other Markdown features not supported by Slack.
+Ensure that all output strictly complies with Slack’s `mrkdwn` specifications.
+Your answer must be precise, of high-quality, and written by an expert using an unbiased and journalistic tone.
+Use the language specified by user in messages as the working language when explicitly provided.
+If you need to use Mandarin, you MUST use Traditional Chinese (台灣繁體中文)
+You MUST handoff to the summary agent when you need to summarize.
+"""  # noqa
+
 
 class OpenAIAgent:
     """A wrapper for OpenAI Agent"""
 
     def __init__(self, name: str, mcp_servers: list | None = None) -> None:
+        self.language_preference = "Traditional Chinese (台灣繁體中文)"
         self.summary_agent = get_summary_agent(
-            lang="台灣中文",
+            lang=self.language_preference,
             length=1_000,
         )
         self.main_agent = Agent(
             name=name,
-            instructions="""
-            You are a helpful Slack bot assistant. When responding, you must
-            strictly use Slack’s `mrkdwn` formatting syntax only. Do not generate
-            headings (`#`), tables, or any other Markdown features not supported by
-            Slack. Ensure that all output strictly complies with Slack’s `mrkdwn`
-            specifications. Keep your responses readable and concise. Use English
-            language for all responses. If you need to use Mandarin, please use
-            Traditional Chinese (台灣繁體中文). Handoff to the summary agent when you need to summarize.
-            """,
+            instructions=INSTRUCTIONS.format(lang=self.language_preference),
             model=get_openai_model(),
             model_settings=get_openai_model_settings(),
             tools=[markitdown_scrape_tool, map_tool, search_tool],
