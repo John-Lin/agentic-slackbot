@@ -62,9 +62,9 @@ class SlackMCPBot:
 
     async def handle_message(self, message, say):
         """Handle direct messages to the bot."""
-        await self._process_message(message, say)
         # Only process direct messages
-        # if message.get("channel_type") == "im" and not message.get("subtype"):
+        if message.get("channel_type") == "im" and not message.get("subtype"):
+            await self._process_message(message, say)
 
     async def _process_message(self, event, say):
         """Process incoming messages and generate responses."""

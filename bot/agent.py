@@ -6,6 +6,9 @@ from typing import Any
 from agentize.agents.summary import get_summary_agent
 from agentize.model import get_openai_model
 from agentize.model import get_openai_model_settings
+from agentize.tools.firecrawl import map_tool
+from agentize.tools.firecrawl import search_tool
+from agentize.tools.markitdown import markitdown_scrape_tool
 from agents import Agent
 from agents import Runner
 from agents.mcp import MCPServerStdio
@@ -32,7 +35,7 @@ class OpenAIAgent:
             """,
             model=get_openai_model(),
             model_settings=get_openai_model_settings(),
-            # tools=[scrape_tool, map_tool, search_tool],
+            tools=[markitdown_scrape_tool, map_tool, search_tool],
             handoffs=[self.summary_agent],
             mcp_servers=(mcp_servers if mcp_servers is not None else []),
         )
