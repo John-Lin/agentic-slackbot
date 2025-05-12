@@ -7,11 +7,12 @@ from agentize.model import get_openai_model
 from agentize.model import get_openai_model_settings
 from agentize.prompts.summary import INSTRUCTIONS as SUMMARIZE_PROMPT
 from agentize.prompts.summary import Summary
+from agentize.tools.duckduckgo import duckduckgo_search
 from agentize.tools.firecrawl import map_tool
-from agentize.tools.firecrawl import search_tool
 from agentize.tools.markitdown import markitdown_scrape_tool
 from agents import Agent
 from agents import Runner
+from agents import TResponseInputItem
 from agents.mcp import MCPServerStdio
 
 INSTRUCTIONS = """
@@ -42,11 +43,12 @@ class OpenAIAgent:
             instructions=INSTRUCTIONS.format(lang=self.language_preference),
             model=get_openai_model(model="gpt-4.1", api_type="chat_completions"),
             model_settings=get_openai_model_settings(),
-            tools=[markitdown_scrape_tool, map_tool, search_tool],
+            tools=[markitdown_scrape_tool, map_tool, duckduckgo_search],
             handoffs=[self.summary_agent],
             mcp_servers=(mcp_servers if mcp_servers is not None else []),
         )
         self.name = name
+        self.messages: list[TResponseInputItem] = []
 
     @classmethod
     def from_dict(cls, name: str, config: dict[str, Any]) -> OpenAIAgent:
@@ -71,9 +73,18 @@ class OpenAIAgent:
             except Exception as e:
                 logging.error(f"Error during connecting of server {mcp_server.name}: {e}")
 
-    async def run(self, messages: list) -> str:
+    async def run(self, message: str) -> str:
         """Run a workflow starting at the given agent."""
-        result = await Runner.run(self.main_agent, input=messages)
+        self.messages.append(
+            {
+                "role": "user",
+                "content": message,
+            }
+        )
+        result = await Runner.run(self.main_agent, input=self.messages)
+        self.messages = result.to_input_list()
+        # Add conversation history (last 5 messages)
+        self.messages = self.messages[-5:]
         return result.final_output
 
     async def cleanup(self) -> None:

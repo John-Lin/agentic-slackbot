@@ -76,9 +76,9 @@ class SlackMCPBot:
             return
 
         # Get text and remove bot mention if present
-        text = event.get("text", "")
+        user_text = event.get("text", "")
         if hasattr(self, "bot_id") and self.bot_id:
-            text = text.replace(f"<@{self.bot_id}>", "").strip()
+            user_text = user_text.replace(f"<@{self.bot_id}>", "").strip()
 
         thread_ts = event.get("thread_ts", event.get("ts"))
 
@@ -86,25 +86,26 @@ class SlackMCPBot:
         if channel not in self.conversations:
             self.conversations[channel] = {"messages": []}
 
+        messages = []
+
+        # Add user message to history
+        self.conversations[channel]["messages"].append({"role": "user", "content": user_text})
+
+        # Add conversation history (last 5 messages)
+        if "messages" in self.conversations[channel]:
+            messages.extend(self.conversations[channel]["messages"][-5:])
+
+        logging.debug(self.conversations)
+
         try:
-            messages = []
-
-            # Add user message to history
-            self.conversations[channel]["messages"].append({"role": "user", "content": text})
-
-            # Add conversation history (last 5 messages)
-            if "messages" in self.conversations[channel]:
-                messages.extend(self.conversations[channel]["messages"][-5:])
-
-            logging.debug(messages)
             # Get LLM response
-            agent_resp = await self.agent.run(messages)
+            asst_text = await self.agent.run(user_text)
 
             # Add assistant response to conversation history
-            self.conversations[channel]["messages"].append({"role": "assistant", "content": str(agent_resp)})
+            self.conversations[channel]["messages"].append({"role": "assistant", "content": str(asst_text)})
 
             # Send the response to the user
-            await say(text=str(agent_resp), channel=channel, thread_ts=thread_ts)
+            await say(text=str(asst_text), channel=channel, thread_ts=thread_ts)
 
         except Exception as e:
             error_message = f"I'm sorry, I encountered an error: {str(e)}"
