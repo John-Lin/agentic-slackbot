@@ -24,7 +24,15 @@ If you are using Azure OpenAI, you can set the following environment variables i
 AZURE_OPENAI_API_KEY=""
 AZURE_OPENAI_ENDPOINT="https://<myopenai>.azure.com/"
 OPENAI_MODEL="gpt-4o"
-AZURE_OPENAI_API_VERSION="2025-03-01-preview"
+OPENAI_API_VERSION="2025-03-01-preview"
+```
+
+If you are using Langfuse
+
+```
+export LANGFUSE_PUBLIC_KEY="xxx"
+export LANGFUSE_SECRET_KEY="xxx"
+export LANGFUSE_HOST="xxx"
 ```
 
 ## Running the Bot
