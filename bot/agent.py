@@ -8,8 +8,8 @@ from agentize.model import get_openai_model_settings
 from agentize.prompts.summary import INSTRUCTIONS as SUMMARIZE_PROMPT
 from agentize.prompts.summary import Summary
 from agentize.tools.duckduckgo import duckduckgo_search
-from agentize.tools.firecrawl import map_tool
 from agentize.tools.markitdown import markitdown_scrape_tool
+from agentize.utils import configure_langfuse
 from agents import Agent
 from agents import Runner
 from agents import TResponseInputItem
@@ -31,6 +31,7 @@ class OpenAIAgent:
     """A wrapper for OpenAI Agent"""
 
     def __init__(self, name: str, mcp_servers: list | None = None) -> None:
+        configure_langfuse("Slack Bot")
         self.language_preference = "Traditional Chinese (台灣繁體中文)"
         self.summary_agent = Agent(
             name="summary_agent",
@@ -43,7 +44,7 @@ class OpenAIAgent:
             instructions=INSTRUCTIONS.format(lang=self.language_preference),
             model=get_openai_model(model="gpt-4.1", api_type="chat_completions"),
             model_settings=get_openai_model_settings(),
-            tools=[markitdown_scrape_tool, map_tool, duckduckgo_search],
+            tools=[markitdown_scrape_tool, duckduckgo_search],
             handoffs=[self.summary_agent],
             mcp_servers=(mcp_servers if mcp_servers is not None else []),
         )

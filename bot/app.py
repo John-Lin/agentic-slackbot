@@ -12,7 +12,8 @@ async def main() -> None:
     """Initialize and run the Slack bot."""
     config = Configuration()
 
-    server_config = config.load_config("servers_config.json")
+    # server_config = config.load_config("servers_config.json")
+    server_config = config.load_config("dummy_servers_config.json")
 
     # Initialize the OpenAI agents with mcp servers
     openai_agent = OpenAIAgent.from_dict("Slack Bot Agent", server_config["mcpServers"])

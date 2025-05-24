@@ -36,7 +36,7 @@ class SlackMCPBot:
 
         # Set up event handlers
         self.app.event("app_mention")(self.handle_mention)
-        self.app.message()(self.handle_message)
+        self.app.event("message")(self.handle_message)
 
     async def initialize_agent(self) -> None:
         """Initialize all MCP servers and discover tools."""
@@ -56,13 +56,15 @@ class SlackMCPBot:
             logging.error(f"Failed to get bot info: {e}")
             self.bot_id = None
 
-    async def handle_mention(self, event, say):
+    async def handle_mention(self, event, say, ack):
         """Handle mentions of the bot in channels."""
+        await ack()  # Acknowledge the event
         await self._process_message(event, say)
 
-    async def handle_message(self, message, say):
+    async def handle_message(self, message, say, ack):
         """Handle direct messages to the bot."""
         # Only process direct messages
+        await ack()  # Acknowledge the event
         if message.get("channel_type") == "im" and not message.get("subtype"):
             await self._process_message(message, say)
 
