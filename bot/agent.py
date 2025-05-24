@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from agentize.agents.summary import get_summary_agent
 from agentize.model import get_openai_model
 from agentize.model import get_openai_model_settings
+from agentize.prompts.summary import INSTRUCTIONS as SUMMARIZE_PROMPT
+from agentize.prompts.summary import Summary
 from agentize.tools.firecrawl import map_tool
 from agentize.tools.firecrawl import search_tool
 from agentize.tools.markitdown import markitdown_scrape_tool
@@ -30,14 +31,16 @@ class OpenAIAgent:
 
     def __init__(self, name: str, mcp_servers: list | None = None) -> None:
         self.language_preference = "Traditional Chinese (台灣繁體中文)"
-        self.summary_agent = get_summary_agent(
-            lang=self.language_preference,
-            length=1_000,
+        self.summary_agent = Agent(
+            name="summary_agent",
+            model=get_openai_model(model="o3-mini", api_type="chat_completions"),
+            instructions=SUMMARIZE_PROMPT.format(lang=self.language_preference, length=1_000),
+            output_type=Summary,
         )
         self.main_agent = Agent(
             name=name,
             instructions=INSTRUCTIONS.format(lang=self.language_preference),
-            model=get_openai_model(),
+            model=get_openai_model(model="gpt-4.1", api_type="chat_completions"),
             model_settings=get_openai_model_settings(),
             tools=[markitdown_scrape_tool, map_tool, search_tool],
             handoffs=[self.summary_agent],
