@@ -1,0 +1,149 @@
+manifest:
+  version: "0.1.2"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: john-lin/agentic-slackbot
+    source: https://github.com/john-lin/agentic-slackbot
+    branch: master
+    commit: "486aeae8"
+    scope: [bot/agent.py, bot/slack.py]
+  issued:
+    by: A2AS.org
+    at: '2026-01-26T16:15:02Z'
+  signatures:
+    digest: sha256:PTTEt3BG3EVs2NQDIX4NpyJ6ytuB9otwF5q3TPbJnHY
+    key: ed25519:YKvqtePuyiTHDUODROFyFz9lW4IRQTvb9-pU3uNq1v8
+    sig: ed25519:q4JSnbqYybU44KXG8g3tLlWIx0uM_ZLjm0_peMf6UiePygxcAxifOy9rcjFTI-v9_vLw6TdBtiEd5UpjZZ0UBg
+
+agents:
+  agent.OpenAIAgent.main_agent:
+    type: class
+    models: [gpt-4.1]
+    tools: [markitdown_scrape_tool, duckduckgo_search]
+    params:
+      class: OpenAIAgent
+      name: name
+      model_settings: get_openai_model_settings()
+      instructions: [INSTRUCTIONS.format(lang=self.language_preference)]
+  agent.OpenAIAgent.summary_agent:
+    type: class
+    models: [o3-mini]
+    params:
+      class: OpenAIAgent
+      name: summary_agent
+      output_type: Summary
+      instructions: ['SUMMARIZE_PROMPT.format(lang=self.language_preference, length=1000)']
+
+models:
+  gpt-4.1:
+    type: literal
+    agents: [agent.OpenAIAgent.main_agent]
+    params:
+      provider: openai
+  o3-mini:
+    type: literal
+    agents: [agent.OpenAIAgent.summary_agent]
+    params:
+      provider: openai
+
+tools:
+  duckduckgo_search:
+    type: variable
+    agents: [agent.OpenAIAgent.main_agent]
+    params:
+      dynamic: "True"
+  markitdown_scrape_tool:
+    type: variable
+    agents: [agent.OpenAIAgent.main_agent]
+    params:
+      dynamic: "True"
+
+imports:
+  Agent: agents.Agent
+  annotations: __future__.annotations
+  Any: typing.Any
+  AsyncApp: slack_bolt.async_app.AsyncApp
+  asyncio: asyncio
+  AsyncSocketModeHandler: slack_bolt.adapter.socket_mode.async_handler.AsyncSocketModeHandler
+  AsyncWebClient: slack_sdk.web.async_client.AsyncWebClient
+  Configuration: config.Configuration
+  configure_langfuse: agentize.utils.configure_langfuse
+  duckduckgo_search: agentize.tools.duckduckgo.duckduckgo_search
+  get_openai_model: agentize.model.get_openai_model
+  get_openai_model_settings: agentize.model.get_openai_model_settings
+  logging: logging
+  markitdown_scrape_tool: agentize.tools.markitdown.markitdown_scrape_tool
+  MCPServerStdio: agents.mcp.MCPServerStdio
+  OpenAIAgent: agent.OpenAIAgent
+  Runner: agents.Runner
+  SlackMCPBot: slack.SlackMCPBot
+  SUMMARIZE_PROMPT: agentize.prompts.summary.INSTRUCTIONS
+  Summary: agentize.prompts.summary.Summary
+  TResponseInputItem: agents.TResponseInputItem
+
+functions:
+  __init__:
+    type: sync
+    module: bot.agent
+    args: [self, name, mcp_servers]
+    params:
+      returns: None
+  _process_message:
+    type: async
+    module: bot.slack
+    args: [self, event, say]
+  cleanup:
+    type: async
+    module: bot.agent
+    args: [self]
+    params:
+      returns: None
+  connect:
+    type: async
+    module: bot.agent
+    args: [self]
+    params:
+      returns: None
+  from_dict:
+    type: sync
+    module: bot.agent
+    args: [cls, name, config]
+    params:
+      returns: OpenAIAgent
+  handle_mention:
+    type: async
+    module: bot.slack
+    args: [self, event, say, ack]
+  handle_message:
+    type: async
+    module: bot.slack
+    args: [self, message, say, ack]
+  initialize_agent:
+    type: async
+    module: bot.slack
+    args: [self]
+    params:
+      returns: None
+  initialize_bot_info:
+    type: async
+    module: bot.slack
+    args: [self]
+    params:
+      returns: None
+  main:
+    type: async
+    module: bot.app
+    params:
+      returns: None
+  run:
+    type: async
+    module: bot.agent
+    args: [self, message]
+    params:
+      returns: str
+  start:
+    type: async
+    module: bot.slack
+    args: [self]
+    params:
+      returns: None
