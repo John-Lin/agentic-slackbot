@@ -33,6 +33,10 @@ class SlackMCPBot:
         self.client = AsyncWebClient(token=slack_bot_token, proxy=proxy)
         self.agent = openai_agent
 
+        # Tracks thread_ts values where the bot has been mentioned, so subsequent
+        # messages in those threads don't require an explicit mention.
+        self.active_threads: set[str] = set()
+
         # Set up event handlers
         self.app.event("app_mention")(self.handle_mention)
         self.app.event("message")(self.handle_message)
@@ -55,13 +59,33 @@ class SlackMCPBot:
     async def handle_mention(self, event, say, ack):
         """Handle mentions of the bot in channels."""
         await ack()
+        thread_ts = event.get("thread_ts", event.get("ts"))
+        self.active_threads.add(thread_ts)
         await self._process_message(event, say)
 
     async def handle_message(self, message, say, ack):
-        """Handle direct messages to the bot."""
+        """Handle direct messages and follow-up messages in active threads."""
         await ack()
-        if message.get("channel_type") == "im" and not message.get("subtype"):
+        if message.get("subtype"):
+            return
+
+        channel_type = message.get("channel_type")
+        thread_ts = message.get("thread_ts")
+
+        is_dm = channel_type == "im"
+        # Respond in threads where the bot was previously mentioned, but skip
+        # messages that @mention the bot (handle_mention already handles those).
+        is_active_thread_followup = (
+            thread_ts is not None and thread_ts in self.active_threads and not self._is_bot_mentioned(message)
+        )
+
+        if is_dm or is_active_thread_followup:
             await self._process_message(message, say)
+
+    def _is_bot_mentioned(self, message) -> bool:
+        if not getattr(self, "bot_id", None):
+            return False
+        return f"<@{self.bot_id}>" in message.get("text", "")
 
     async def _process_message(self, event, say):
         """Process incoming messages and generate responses."""
