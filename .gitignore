@@ -8,9 +8,19 @@ wheels/
 
 # Virtual environments
 .venv
-
-# Python environment
 .envrc
 .env
 
-test_servers_config.json
+# User-specific MCP server config (use servers_config.example.json as template)
+servers_config.json
+*_servers_config.json
+
+# Local tooling config
+.claude/
+
+# Kubernetes (contains env secrets)
+k8s/
+
+# Test artifacts
+.coverage
+logs/

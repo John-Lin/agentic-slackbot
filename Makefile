@@ -11,6 +11,6 @@ type:
 	uv run mypy --install-types --non-interactive .
 
 test:
-	uv run pytest -v -s --cov=src tests
+	uv run pytest -v -s --cov=bot tests
 
 .PHONY: format lint type test

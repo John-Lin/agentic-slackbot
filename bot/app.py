@@ -7,10 +7,13 @@ from .slack import SlackMCPBot
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
+    )
 
     config = Configuration()
-    server_config = config.load_config("dummy_servers_config.json")
+    server_config = config.load_config("servers_config.json")
 
     openai_agent = OpenAIAgent.from_dict("Slack Bot Agent", server_config)
 

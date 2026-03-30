@@ -8,8 +8,6 @@ from slack_sdk.web.async_client import AsyncWebClient
 from .agent import OpenAIAgent
 from .formatting import markdown_to_slack_mrkdwn
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
-
 
 class SlackMCPBot:
     """Manages the Slack bot integration with agents."""
@@ -21,6 +19,11 @@ class SlackMCPBot:
         proxy: str | None,
         openai_agent: OpenAIAgent,
     ) -> None:
+        if slack_bot_token is None:
+            raise ValueError("SLACK_BOT_TOKEN is not set")
+        if slack_app_token is None:
+            raise ValueError("SLACK_APP_TOKEN is not set")
+
         self.app = AsyncApp(
             token=slack_bot_token,
             raise_error_for_unhandled_request=False,
@@ -36,11 +39,8 @@ class SlackMCPBot:
 
     async def initialize_agent(self) -> None:
         """Initialize all MCP servers and discover tools."""
-        try:
-            await self.agent.connect()
-            logging.info(f"Initialized agent {self.agent.name} with tools")
-        except Exception as e:
-            logging.error(f"Failed to initialize agent {self.agent.name}: {e}")
+        await self.agent.connect()
+        logging.info(f"Initialized agent {self.agent.name}")
 
     async def initialize_bot_info(self) -> None:
         """Get the bot's ID and other info."""
@@ -88,9 +88,10 @@ class SlackMCPBot:
                 logging.warning("Failed to send mrkdwn message, falling back to plain text")
                 await say(text=str(asst_text), channel=channel, thread_ts=thread_ts)
         except Exception as e:
-            error_message = f"I'm sorry, I encountered an error: {str(e)}"
             logging.error(f"Error processing message: {e}", exc_info=True)
-            await say(text=error_message, channel=channel, thread_ts=thread_ts)
+            await say(
+                text="I'm sorry, I encountered an error processing your request.", channel=channel, thread_ts=thread_ts
+            )
 
     async def start(self) -> None:
         """Start the Slack bot."""
