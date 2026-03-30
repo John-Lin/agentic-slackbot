@@ -32,6 +32,7 @@ class SlackMCPBot:
 
         self.client = AsyncWebClient(token=slack_bot_token, proxy=proxy)
         self.agent = openai_agent
+        self._user_name_cache: dict[str, str] = {}
 
         # Maps thread_ts to the user_id who first @mentioned the bot, so only
         # that user's follow-up messages in the thread are handled without a mention.
@@ -86,6 +87,18 @@ class SlackMCPBot:
         if is_dm or is_active_thread_followup:
             await self._process_message(message, say)
 
+    async def _get_display_name(self, user_id: str) -> str:
+        if user_id in self._user_name_cache:
+            return self._user_name_cache[user_id]
+        try:
+            resp = await self.client.users_info(user=user_id)
+            profile = resp["user"]["profile"]
+            name = profile.get("display_name") or profile.get("real_name") or user_id
+        except Exception:
+            name = user_id
+        self._user_name_cache[user_id] = name
+        return name
+
     def _is_bot_mentioned(self, message) -> bool:
         if not getattr(self, "bot_id", None):
             return False
@@ -104,6 +117,10 @@ class SlackMCPBot:
         user_text = event.get("text", "")
         if hasattr(self, "bot_id") and self.bot_id:
             user_text = user_text.replace(f"<@{self.bot_id}>", "").strip()
+
+        if user_id:
+            display_name = await self._get_display_name(user_id)
+            user_text = f"[{display_name}] {user_text}"
 
         thread_ts = event.get("thread_ts", event.get("ts"))
 
