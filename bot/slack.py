@@ -1,12 +1,12 @@
 import asyncio
 import logging
-from typing import Any
 
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk.web.async_client import AsyncWebClient
 
 from .agent import OpenAIAgent
+from .formatting import markdown_to_slack_mrkdwn
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -25,14 +25,10 @@ class SlackMCPBot:
             token=slack_bot_token,
             raise_error_for_unhandled_request=False,
         )
-        # Create a socket mode handler with the app token
         self.socket_mode_handler = AsyncSocketModeHandler(self.app, slack_app_token)
 
         self.client = AsyncWebClient(token=slack_bot_token, proxy=proxy)
         self.agent = openai_agent
-        self.conversations: dict[
-            str, dict[str, list[dict[str, str | Any | None]]]
-        ] = {}  # Store conversation context per channel
 
         # Set up event handlers
         self.app.event("app_mention")(self.handle_mention)
@@ -58,13 +54,12 @@ class SlackMCPBot:
 
     async def handle_mention(self, event, say, ack):
         """Handle mentions of the bot in channels."""
-        await ack()  # Acknowledge the event
+        await ack()
         await self._process_message(event, say)
 
     async def handle_message(self, message, say, ack):
         """Handle direct messages to the bot."""
-        # Only process direct messages
-        await ack()  # Acknowledge the event
+        await ack()
         if message.get("channel_type") == "im" and not message.get("subtype"):
             await self._process_message(message, say)
 
@@ -84,31 +79,14 @@ class SlackMCPBot:
 
         thread_ts = event.get("thread_ts", event.get("ts"))
 
-        # Get or create conversation context
-        if channel not in self.conversations:
-            self.conversations[channel] = {"messages": []}
-
-        messages = []
-
-        # Add user message to history
-        self.conversations[channel]["messages"].append({"role": "user", "content": user_text})
-
-        # Add conversation history (last 5 messages)
-        if "messages" in self.conversations[channel]:
-            messages.extend(self.conversations[channel]["messages"][-5:])
-
-        logging.debug(self.conversations)
-
         try:
-            # Get LLM response
-            asst_text = await self.agent.run(user_text)
-
-            # Add assistant response to conversation history
-            self.conversations[channel]["messages"].append({"role": "assistant", "content": str(asst_text)})
-
-            # Send the response to the user
-            await say(text=str(asst_text), channel=channel, thread_ts=thread_ts)
-
+            asst_text = await self.agent.run(thread_ts, user_text)
+            mrkdwn_text = markdown_to_slack_mrkdwn(str(asst_text))
+            try:
+                await say(text=mrkdwn_text, channel=channel, thread_ts=thread_ts)
+            except Exception:
+                logging.warning("Failed to send mrkdwn message, falling back to plain text")
+                await say(text=str(asst_text), channel=channel, thread_ts=thread_ts)
         except Exception as e:
             error_message = f"I'm sorry, I encountered an error: {str(e)}"
             logging.error(f"Error processing message: {e}", exc_info=True)
@@ -116,10 +94,8 @@ class SlackMCPBot:
 
     async def start(self) -> None:
         """Start the Slack bot."""
-        # await self.connect()
         await self.initialize_agent()
         await self.initialize_bot_info()
-        # Start the socket mode handler
         logging.info("Starting Slack bot...")
         asyncio.create_task(self.socket_mode_handler.start_async())
         logging.info("Slack bot started and waiting for messages")

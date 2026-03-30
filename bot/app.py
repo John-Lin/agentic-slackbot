@@ -9,17 +9,10 @@ from .slack import SlackMCPBot
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    """Initialize and run the Slack bot."""
     config = Configuration()
-
-    # server_config = config.load_config("servers_config.json")
     server_config = config.load_config("dummy_servers_config.json")
 
-    # Initialize the OpenAI agents with mcp servers
-    openai_agent = OpenAIAgent.from_dict("Slack Bot Agent", server_config["mcpServers"])
-
-    # Initialize the OpenAI agents
-    # openai_agent = OpenAIAgent("Slack Bot Agent")
+    openai_agent = OpenAIAgent.from_dict("Slack Bot Agent", server_config)
 
     slack_bot = SlackMCPBot(
         config.slack_bot_token,
@@ -30,10 +23,9 @@ async def main() -> None:
 
     try:
         await slack_bot.start()
-        # Keep the main task alive until interrupted
         while True:
             await asyncio.sleep(1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         logging.info("Shutting down...")
     except Exception as e:
         logging.error(f"Error: {e}")
