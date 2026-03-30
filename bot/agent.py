@@ -28,15 +28,26 @@ MCP_SESSION_TIMEOUT_SECONDS = 30.0
 
 
 def _get_model() -> OpenAIChatCompletionsModel:
-    """Create an OpenAI model from environment variables."""
+    """Create an OpenAI model from environment variables.
+
+    Client selection priority:
+    1. Azure OpenAI — when both AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT are set.
+    2. OpenAI-compatible proxy — when OPENAI_PROXY_BASE_URL is set.
+    3. Default OpenAI — falls back to standard AsyncOpenAI (reads OPENAI_API_KEY).
+    """
     model_name = os.getenv("OPENAI_MODEL", "gpt-4.1")
 
     client: AsyncOpenAI
-    if os.getenv("AZURE_OPENAI_API_KEY"):
+    if os.getenv("AZURE_OPENAI_API_KEY") and os.getenv("AZURE_OPENAI_ENDPOINT"):
         client = AsyncAzureOpenAI(
             api_key=os.environ["AZURE_OPENAI_API_KEY"],
             azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
             api_version=os.getenv("OPENAI_API_VERSION", "2025-04-01-preview"),
+        )
+    elif os.getenv("OPENAI_PROXY_BASE_URL"):
+        client = AsyncOpenAI(
+            base_url=os.environ["OPENAI_PROXY_BASE_URL"],
+            api_key=os.getenv("OPENAI_PROXY_API_KEY") or os.getenv("OPENAI_API_KEY", ""),
         )
     else:
         client = AsyncOpenAI()
