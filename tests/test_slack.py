@@ -43,7 +43,7 @@ class TestHandleMention:
 
         ack.assert_called_once()
         # Conversation key should be ts (no thread_ts means new conversation)
-        bot.agent.run.assert_called_once_with("1234567890.123456", "what is the weather?")
+        bot.agent.run.assert_called_once_with("1234567890.123456", "[U123] what is the weather?")
 
     @pytest.mark.anyio
     async def test_mention_in_thread_uses_thread_ts(self, bot):
@@ -59,7 +59,7 @@ class TestHandleMention:
 
         await bot.handle_mention(event, say, ack)
 
-        bot.agent.run.assert_called_once_with("1111111111.111111", "follow up")
+        bot.agent.run.assert_called_once_with("1111111111.111111", "[U123] follow up")
 
     @pytest.mark.anyio
     async def test_mention_replies_in_thread(self, bot):
@@ -89,7 +89,7 @@ class TestHandleMention:
 
         await bot.handle_mention(event, say, ack)
 
-        bot.agent.run.assert_called_once_with("1234567890.123456", "help me")
+        bot.agent.run.assert_called_once_with("1234567890.123456", "[U123] help me")
 
 
 class TestHandleMessage:
@@ -107,7 +107,7 @@ class TestHandleMessage:
 
         await bot.handle_message(message, say, ack)
 
-        bot.agent.run.assert_called_once_with("1234567890.123456", "hello")
+        bot.agent.run.assert_called_once_with("1234567890.123456", "[U123] hello")
 
     @pytest.mark.anyio
     async def test_non_dm_is_ignored(self, bot):
