@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 from typing import Any
 
 from dotenv import find_dotenv
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 
 class Configuration:
@@ -22,9 +25,14 @@ class Configuration:
         """Load environment variables from .env file."""
         load_dotenv(find_dotenv())
 
+    _DEFAULT_CONFIG: dict[str, Any] = {"mcpServers": {}}
+
     @staticmethod
     def load_config(file_path: str) -> dict[str, Any]:
         """Load server configuration from JSON file.
+
+        Returns a default empty config when the file does not exist,
+        allowing the application to start without a config file.
 
         Args:
             file_path: Path to the JSON configuration file.
@@ -33,8 +41,11 @@ class Configuration:
             Dict containing server configuration.
 
         Raises:
-            FileNotFoundError: If configuration file doesn't exist.
             JSONDecodeError: If configuration file is invalid JSON.
         """
-        with open(file_path) as f:
-            return json.load(f)
+        try:
+            with open(file_path) as f:
+                return json.load(f)
+        except FileNotFoundError:
+            logger.warning("Config file %s not found, using default empty config", file_path)
+            return dict(Configuration._DEFAULT_CONFIG)

@@ -65,9 +65,9 @@ Optional HTTP proxy for outbound requests:
 export HTTP_PROXY=""
 ```
 
-## MCP Server Configuration
+## MCP Server Configuration (Optional)
 
-Edit `servers_config.json` to add your MCP servers:
+Create a `servers_config.json` file to add your MCP servers. If this file is not provided, the bot starts with no MCP servers configured.
 
 ```json
 {
@@ -76,6 +76,21 @@ Edit `servers_config.json` to add your MCP servers:
     "my-server": {
       "command": "uvx",
       "args": ["my-mcp-server"]
+    }
+  }
+}
+```
+
+For HTTP-based MCP servers (Streamable HTTP), use `httpUrl`:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "httpUrl": "https://mcp.example.com/mcp",
+      "headers": {
+        "Accept": "application/json, text/event-stream"
+      }
     }
   }
 }
@@ -106,6 +121,18 @@ uv run bot
 ```bash
 docker build -t agentic-slackbot .
 
+docker run -d \
+  --name slackbot \
+  -e SLACK_BOT_TOKEN="" \
+  -e SLACK_APP_TOKEN="" \
+  -e OPENAI_API_KEY="" \
+  -e OPENAI_MODEL="gpt-4.1" \
+  agentic-slackbot
+```
+
+To use MCP servers, mount your config file:
+
+```bash
 docker run -d \
   --name slackbot \
   -e SLACK_BOT_TOKEN="" \

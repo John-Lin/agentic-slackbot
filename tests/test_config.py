@@ -55,9 +55,9 @@ class TestLoadConfig:
         result = Configuration.load_config(str(config_file))
         assert result == config_data
 
-    def test_raises_on_missing_file(self):
-        with pytest.raises(FileNotFoundError):
-            Configuration.load_config("/nonexistent/config.json")
+    def test_returns_default_on_missing_file(self):
+        result = Configuration.load_config("/nonexistent/config.json")
+        assert result == {"mcpServers": {}}
 
     def test_raises_on_invalid_json(self, tmp_path):
         config_file = tmp_path / "bad.json"
