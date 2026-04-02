@@ -102,7 +102,7 @@ class OpenAIAgent:
 
     @classmethod
     def from_dict(cls, name: str, config: dict[str, Any]) -> OpenAIAgent:
-        mcp_servers = []
+        mcp_servers: list[MCPServerStreamableHttp | MCPServerStdio] = []
         for mcp_srv in config.get("mcpServers", {}).values():
             if "httpUrl" in mcp_srv:
                 mcp_servers.append(
