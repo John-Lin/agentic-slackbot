@@ -15,6 +15,4 @@ COPY dummy_servers_config.json /app/servers_config.json
 # Sync the project into a new environment, asserting the lockfile is up to date
 RUN uv sync --locked
 
-VOLUME ["/app/servers_config.json"]
-
 CMD ["uv", "run", "bot"]

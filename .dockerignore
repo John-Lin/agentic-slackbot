@@ -5,8 +5,6 @@
 .ruff_cache
 __pycache__
 .gitignore
-firecrawl_selfhost_servers_config.json
-jira_servers_config.json
 servers_config.json
 .envrc
 .pre-commit-config.yaml
