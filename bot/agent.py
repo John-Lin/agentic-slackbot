@@ -9,6 +9,7 @@ from agents import Agent
 from agents import Runner
 from agents import TResponseInputItem
 from agents.mcp import MCPServerStdio
+from agents.mcp import MCPServerStreamableHttp
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncAzureOpenAI
 from openai import AsyncOpenAI
@@ -101,17 +102,29 @@ class OpenAIAgent:
 
     @classmethod
     def from_dict(cls, name: str, config: dict[str, Any]) -> OpenAIAgent:
-        mcp_servers = [
-            MCPServerStdio(
-                client_session_timeout_seconds=MCP_SESSION_TIMEOUT_SECONDS,
-                params={
-                    "command": mcp_srv["command"],
-                    "args": mcp_srv.get("args", []),
-                    "env": mcp_srv.get("env"),
-                },
-            )
-            for mcp_srv in config.get("mcpServers", {}).values()
-        ]
+        mcp_servers = []
+        for mcp_srv in config.get("mcpServers", {}).values():
+            if "httpUrl" in mcp_srv:
+                mcp_servers.append(
+                    MCPServerStreamableHttp(
+                        client_session_timeout_seconds=MCP_SESSION_TIMEOUT_SECONDS,
+                        params={
+                            "url": mcp_srv["httpUrl"],
+                            "headers": mcp_srv.get("headers", {}),
+                        },
+                    )
+                )
+            else:
+                mcp_servers.append(
+                    MCPServerStdio(
+                        client_session_timeout_seconds=MCP_SESSION_TIMEOUT_SECONDS,
+                        params={
+                            "command": mcp_srv["command"],
+                            "args": mcp_srv.get("args", []),
+                            "env": mcp_srv.get("env"),
+                        },
+                    )
+                )
         instructions = config.get("instructions", DEFAULT_INSTRUCTIONS)
         return cls(name, mcp_servers, instructions=instructions)
 
