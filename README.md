@@ -40,7 +40,7 @@ Create a `.envrc` or `.env` file in the root directory:
 export SLACK_BOT_TOKEN=""
 export SLACK_APP_TOKEN=""
 export OPENAI_API_KEY=""
-export OPENAI_MODEL="gpt-4.1"
+export OPENAI_MODEL="gpt-5.4"
 ```
 
 If you are using Azure OpenAI, set these instead:
@@ -48,7 +48,7 @@ If you are using Azure OpenAI, set these instead:
 ```
 export AZURE_OPENAI_API_KEY=""
 export AZURE_OPENAI_ENDPOINT="https://<myopenai>.azure.com/"
-export OPENAI_MODEL="gpt-4.1"
+export OPENAI_MODEL="gpt-5.4"
 export OPENAI_API_VERSION="2025-03-01-preview"
 ```
 
@@ -126,7 +126,7 @@ docker run -d \
   -e SLACK_BOT_TOKEN="" \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
-  -e OPENAI_MODEL="gpt-4.1" \
+  -e OPENAI_MODEL="gpt-5.4" \
   agentic-slackbot
 ```
 
@@ -138,7 +138,7 @@ docker run -d \
   -e SLACK_BOT_TOKEN="" \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
-  -e OPENAI_MODEL="gpt-4.1" \
+  -e OPENAI_MODEL="gpt-5.4" \
   -v /path/to/servers_config.json:/app/servers_config.json \
   agentic-slackbot
 ```

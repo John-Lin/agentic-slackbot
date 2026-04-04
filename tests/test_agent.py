@@ -211,7 +211,7 @@ class TestGetModel:
     def test_default_model_name(self):
         env = {"OPENAI_API_KEY": "test-key"}
         model = self._call_get_model(env)
-        assert model.model == "gpt-4.1"
+        assert model.model == "gpt-5.4"
 
 
 class TestFromDict:

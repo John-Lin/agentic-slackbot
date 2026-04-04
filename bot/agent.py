@@ -36,7 +36,7 @@ def _get_model() -> OpenAIChatCompletionsModel:
     2. OpenAI-compatible proxy — when OPENAI_PROXY_BASE_URL is set.
     3. Default OpenAI — falls back to standard AsyncOpenAI (reads OPENAI_API_KEY).
     """
-    model_name = os.getenv("OPENAI_MODEL", "gpt-4.1")
+    model_name = os.getenv("OPENAI_MODEL", "gpt-5.4")
 
     client: AsyncOpenAI
     if os.getenv("AZURE_OPENAI_API_KEY") and os.getenv("AZURE_OPENAI_ENDPOINT"):
