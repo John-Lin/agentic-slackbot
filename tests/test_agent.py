@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 import pytest
 from agents.models.interface import Model
+from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
+from agents.models.openai_responses import OpenAIResponsesModel
 from openai import AsyncAzureOpenAI
 
 from bot.agent import DEFAULT_INSTRUCTIONS
@@ -212,6 +214,50 @@ class TestGetModel:
         env = {"OPENAI_API_KEY": "test-key"}
         model = self._call_get_model(env)
         assert model.model == "gpt-5.4"
+
+    def test_returns_responses_model_by_default(self):
+        env = {"OPENAI_API_KEY": "test-key"}
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIResponsesModel)
+
+    def test_returns_chat_completions_model_when_api_type_set(self):
+        env = {"OPENAI_API_KEY": "test-key", "OPENAI_API_TYPE": "chat_completions"}
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIChatCompletionsModel)
+
+    def test_azure_path_returns_responses_model_by_default(self):
+        env = {
+            "AZURE_OPENAI_API_KEY": "test-azure-key",
+            "AZURE_OPENAI_ENDPOINT": "https://my-resource.openai.azure.com",
+        }
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIResponsesModel)
+
+    def test_azure_path_returns_chat_completions_when_api_type_set(self):
+        env = {
+            "AZURE_OPENAI_API_KEY": "test-azure-key",
+            "AZURE_OPENAI_ENDPOINT": "https://my-resource.openai.azure.com",
+            "OPENAI_API_TYPE": "chat_completions",
+        }
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIChatCompletionsModel)
+
+    def test_proxy_path_returns_responses_model_by_default(self):
+        env = {
+            "OPENAI_PROXY_BASE_URL": "https://my-proxy.example.com/v1",
+            "OPENAI_PROXY_API_KEY": "proxy-key",
+        }
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIResponsesModel)
+
+    def test_proxy_path_returns_chat_completions_when_api_type_set(self):
+        env = {
+            "OPENAI_PROXY_BASE_URL": "https://my-proxy.example.com/v1",
+            "OPENAI_PROXY_API_KEY": "proxy-key",
+            "OPENAI_API_TYPE": "chat_completions",
+        }
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIChatCompletionsModel)
 
 
 class TestFromDict:
