@@ -81,13 +81,13 @@ Create a `servers_config.json` file to add your MCP servers. If this file is not
 }
 ```
 
-For HTTP-based MCP servers (Streamable HTTP), use `httpUrl`:
+For HTTP-based MCP servers (Streamable HTTP), use `url`:
 
 ```json
 {
   "mcpServers": {
     "my-server": {
-      "httpUrl": "https://mcp.example.com/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
         "Accept": "application/json, text/event-stream"
       }
