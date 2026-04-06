@@ -42,6 +42,9 @@ export SLACK_BOT_TOKEN=""
 export SLACK_APP_TOKEN=""
 export OPENAI_API_KEY=""
 export OPENAI_MODEL="gpt-5.4"
+
+# Shell skills (disabled by default)
+# export SHELL_SKILLS_ENABLED=1
 ```
 
 If you are using Azure OpenAI (v1 API) or another OpenAI-compatible endpoint:
