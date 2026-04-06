@@ -9,8 +9,9 @@ See also: [agentic-telegram-bot](https://github.com/John-Lin/agentic-telegram-bo
 - Channel @mention and DM support
 - Thread-aware conversations (follow-ups stay in the same thread)
 - Connects to any MCP server via `servers_config.json`
+- Local shell skills via `ShellTool` (opt-in via `SHELL_SKILLS_ENABLED`)
 - Supports OpenAI and OpenAI-compatible endpoints (including Azure OpenAI v1 API)
-- Per-conversation history with automatic truncation
+- Per-conversation history with automatic truncation (last 10 turns)
 
 ## Install Dependencies
 
@@ -57,13 +58,24 @@ Optional HTTP proxy for outbound requests:
 export HTTP_PROXY=""
 ```
 
+## Agent Instructions
+
+Create an `instructions.md` file in the project root with the agent system prompt:
+
+```markdown
+You are a helpful assistant in a Slack workspace.
+When responding, you must strictly use Slack's `mrkdwn` formatting syntax only.
+Keep responses concise and well-structured.
+```
+
+An example is provided in `instructions.md.example`. The bot will fail to start if this file is missing.
+
 ## MCP Server Configuration (Optional)
 
 Create a `servers_config.json` file to add your MCP servers. If this file is not provided, the bot starts with no MCP servers configured.
 
 ```json
 {
-  "instructions": "Your custom system prompt here.",
   "mcpServers": {
     "my-server": {
       "command": "uvx",
@@ -92,7 +104,6 @@ For local MCP servers, use `uv --directory`:
 
 ```json
 {
-  "instructions": "Your custom system prompt here.",
   "mcpServers": {
     "my-server": {
       "command": "uv",
@@ -108,6 +119,27 @@ For local MCP servers, use `uv --directory`:
 uv run bot
 ```
 
+## Shell Skills (Optional)
+
+The bot can execute local shell commands via skills defined in a `skills/` directory. Each subdirectory containing a `SKILL.md` file is registered as a skill.
+
+This feature is **disabled by default**. To enable it, set:
+
+```
+SHELL_SKILLS_ENABLED=1
+```
+
+Skills are auto-discovered at startup. The `SKILL.md` file should have YAML frontmatter with `name` and `description` fields:
+
+```markdown
+---
+name: my-skill
+description: A brief description of what this skill does
+---
+
+Detailed instructions for the agent...
+```
+
 ## Docker
 
 ```bash
@@ -119,10 +151,11 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
+  -v /path/to/instructions.md:/app/instructions.md \
   agentic-slackbot
 ```
 
-To use MCP servers, mount your config file:
+To use MCP servers, also mount your config:
 
 ```bash
 docker run -d \
@@ -131,6 +164,7 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
+  -v /path/to/instructions.md:/app/instructions.md \
   -v /path/to/servers_config.json:/app/servers_config.json \
   agentic-slackbot
 ```

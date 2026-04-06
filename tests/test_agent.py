@@ -1,27 +1,31 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import create_autospec
 from unittest.mock import patch
 
 import pytest
+from agents import ShellTool
 from agents.models.interface import Model
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from agents.models.openai_responses import OpenAIResponsesModel
 
-from bot.agent import DEFAULT_INSTRUCTIONS
 from bot.agent import MAX_TURNS
 from bot.agent import OpenAIAgent
+from bot.agent import _parse_skill_description
+from bot.agent import _shell_executor
 
 
 @pytest.fixture(autouse=True)
-def _mock_model(monkeypatch):
-    """Prevent tests from constructing a real OpenAI client."""
+def _mock_model(monkeypatch, tmp_path_factory):
+    """Prevent tests from constructing a real OpenAI client and isolate skills."""
     monkeypatch.setattr("bot.agent._get_model", lambda: create_autospec(Model))
+    monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path_factory.mktemp("empty_skills"))
 
 
 class TestPerChannelConversations:
     def test_separate_channels_have_independent_history(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         agent.append_user_message(chat_id="C001", message="hello from C001")
         agent.append_user_message(chat_id="C002", message="hello from C002")
 
@@ -34,7 +38,7 @@ class TestPerChannelConversations:
         assert msgs_c002[0]["content"] == "hello from C002"
 
     def test_same_channel_accumulates_messages(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         agent.append_user_message(chat_id="C001", message="first")
         agent.append_user_message(chat_id="C001", message="second")
 
@@ -44,18 +48,18 @@ class TestPerChannelConversations:
         assert msgs[1]["content"] == "second"
 
     def test_unknown_channel_returns_empty(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         assert agent.get_messages(chat_id="C999") == []
 
     def test_set_messages_replaces_history(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         agent.append_user_message(chat_id="C001", message="old")
         new_msgs = [{"role": "user", "content": "replaced"}]
         agent.set_messages(chat_id="C001", messages=new_msgs)
         assert agent.get_messages(chat_id="C001") == new_msgs
 
     def test_set_messages_does_not_affect_other_channels(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         agent.append_user_message(chat_id="C001", message="channel 1")
         agent.append_user_message(chat_id="C002", message="channel 2")
         agent.set_messages(chat_id="C001", messages=[])
@@ -64,36 +68,28 @@ class TestPerChannelConversations:
 
 
 class TestInstructions:
-    def test_default_instructions_when_none_provided(self):
-        agent = OpenAIAgent(name="test")
-        assert agent.agent.instructions == DEFAULT_INSTRUCTIONS
-
     def test_custom_instructions(self):
         agent = OpenAIAgent(name="test", instructions="Be a Slack helper.")
         assert agent.agent.instructions == "Be a Slack helper."
 
-    def test_from_dict_reads_instructions(self):
-        config = {
-            "instructions": "Custom prompt here.",
-            "mcpServers": {},
-        }
-        agent = OpenAIAgent.from_dict("test", config)
-        assert agent.agent.instructions == "Custom prompt here."
+    def test_from_dict_loads_instructions_from_file(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "instructions.md").write_text("From file prompt.", encoding="utf-8")
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        assert agent.agent.instructions == "From file prompt."
 
-    def test_from_dict_uses_default_without_instructions(self):
-        config = {
-            "mcpServers": {},
-        }
-        agent = OpenAIAgent.from_dict("test", config)
-        assert agent.agent.instructions == DEFAULT_INSTRUCTIONS
+    def test_from_dict_fails_fast_when_instructions_file_missing(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(FileNotFoundError, match="Instructions file not found"):
+            OpenAIAgent.from_dict("test", {"mcpServers": {}})
 
 
 class TestHistoryTruncation:
     def test_default_max_turns(self):
-        assert MAX_TURNS == 25
+        assert MAX_TURNS == 10
 
     def test_truncate_keeps_recent_turns(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         for i in range(30):
             agent.set_messages(
                 chat_id="C001",
@@ -109,11 +105,11 @@ class TestHistoryTruncation:
 
         user_msgs = [m for m in msgs if m["role"] == "user"]
         assert len(user_msgs) == MAX_TURNS
-        assert user_msgs[0]["content"] == "user-5"
+        assert user_msgs[0]["content"] == f"user-{30 - MAX_TURNS}"
         assert user_msgs[-1]["content"] == "user-29"
 
     def test_truncate_preserves_tool_messages_within_turn(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         history = []
         for i in range(MAX_TURNS + 2):
             history.append({"role": "user", "content": f"user-{i}"})
@@ -132,7 +128,7 @@ class TestHistoryTruncation:
         assert len(tool_msgs) == 1
 
     def test_no_truncation_when_under_limit(self):
-        agent = OpenAIAgent(name="test")
+        agent = OpenAIAgent(name="test", instructions="test-prompt")
         for i in range(3):
             agent.set_messages(
                 chat_id="C001",
@@ -150,7 +146,7 @@ class TestHistoryTruncation:
 
 
 class TestGetModel:
-    """Tests for the _get_model function's client selection logic."""
+    """Tests for the _get_model function."""
 
     @pytest.fixture(autouse=True)
     def _mock_model(self):
@@ -183,12 +179,14 @@ class TestGetModel:
         model = self._call_get_model(env)
         assert isinstance(model, OpenAIChatCompletionsModel)
 
-    def test_returns_chat_completions_when_api_type_set(self):
-        env = {"OPENAI_API_KEY": "test-key", "OPENAI_API_TYPE": "chat_completions"}
-        model = self._call_get_model(env)
-        assert isinstance(model, OpenAIChatCompletionsModel)
+
+@pytest.fixture
+def _stub_instructions(monkeypatch):
+    """Stub out instructions.md loading for from_dict tests."""
+    monkeypatch.setattr("bot.agent._load_instructions", lambda: "stub instructions")
 
 
+@pytest.mark.usefixtures("_stub_instructions")
 class TestFromDict:
     def test_creates_mcp_servers_from_config(self):
         config = {
@@ -212,3 +210,247 @@ class TestFromDict:
         config = {"mcpServers": {}}
         agent = OpenAIAgent.from_dict("test", config)
         assert agent.agent.mcp_servers == []
+
+
+@pytest.mark.usefixtures("_stub_instructions")
+class TestLoadShellSkills:
+    def _make_skill_dir(self, tmp_path):
+        """Create a valid skill directory and return its parent."""
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: A test skill\n---\n")
+        return tmp_path
+
+    def test_disabled_by_default(self, tmp_path, monkeypatch):
+        """Skills exist but SHELL_SKILLS_ENABLED is not set — no ShellTool."""
+        monkeypatch.delenv("SHELL_SKILLS_ENABLED", raising=False)
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", self._make_skill_dir(tmp_path))
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tools = [t for t in agent.agent.tools if isinstance(t, ShellTool)]
+        assert len(shell_tools) == 0
+
+    def test_enabled_with_env_var(self, tmp_path, monkeypatch):
+        """SHELL_SKILLS_ENABLED=1 and skills exist — ShellTool is added."""
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", self._make_skill_dir(tmp_path))
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tools = [t for t in agent.agent.tools if isinstance(t, ShellTool)]
+        assert len(shell_tools) == 1
+
+    def test_no_shell_tool_when_skills_dir_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path / "nonexistent")
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tools = [t for t in agent.agent.tools if isinstance(t, ShellTool)]
+        assert len(shell_tools) == 0
+
+    def test_shell_tool_added_when_skill_found(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: A test skill\n---\n")
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tool = next(t for t in agent.agent.tools if isinstance(t, ShellTool))
+        skill = shell_tool.environment["skills"][0]
+        assert skill["name"] == "my-skill"
+        assert skill["description"] == "A test skill"
+        assert skill["path"] == str(skill_dir)
+
+    def test_multiple_skills_all_mounted(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        for name in ["skill-a", "skill-b"]:
+            d = tmp_path / name
+            d.mkdir()
+            (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: desc {name}\n---\n")
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tool = next(t for t in agent.agent.tools if isinstance(t, ShellTool))
+        assert len(shell_tool.environment["skills"]) == 2
+
+    def test_directory_without_skill_md_is_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        (tmp_path / "not-a-skill").mkdir()
+        good = tmp_path / "real-skill"
+        good.mkdir()
+        (good / "SKILL.md").write_text("---\nname: real-skill\ndescription: d\n---\n")
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tool = next(t for t in agent.agent.tools if isinstance(t, ShellTool))
+        skills = shell_tool.environment["skills"]
+        assert len(skills) == 1
+        assert skills[0]["name"] == "real-skill"
+
+    def test_mcp_servers_and_shell_skills_coexist(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        skill_dir = tmp_path / "s"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: s\ndescription: d\n---\n")
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+
+        config = {"mcpServers": {"my-mcp": {"command": "uvx", "args": ["something"]}}}
+        agent = OpenAIAgent.from_dict("test", config)
+        assert len(agent.agent.mcp_servers) == 1
+        shell_tools = [t for t in agent.agent.tools if isinstance(t, ShellTool)]
+        assert len(shell_tools) == 1
+
+    def test_unreadable_utf8_skill_file_is_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        bad = tmp_path / "bad-skill"
+        bad.mkdir()
+        (bad / "SKILL.md").write_bytes(b"\xff\xfe\x00\x00")
+
+        good = tmp_path / "good-skill"
+        good.mkdir()
+        (good / "SKILL.md").write_text("---\nname: good-skill\ndescription: good\n---\n")
+
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tool = next(t for t in agent.agent.tools if isinstance(t, ShellTool))
+        skills = shell_tool.environment["skills"]
+        assert len(skills) == 1
+        assert skills[0]["name"] == "good-skill"
+
+    def test_oserror_reading_skill_file_is_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SHELL_SKILLS_ENABLED", "1")
+        bad = tmp_path / "bad-skill"
+        bad.mkdir()
+        bad_file = bad / "SKILL.md"
+        bad_file.write_text("---\nname: bad\ndescription: bad\n---\n")
+
+        good = tmp_path / "good-skill"
+        good.mkdir()
+        (good / "SKILL.md").write_text("---\nname: good-skill\ndescription: good\n---\n")
+
+        original_read_text = Path.read_text
+
+        def _read_text(self: Path, *args, **kwargs):
+            if self == bad_file:
+                raise OSError("permission denied")
+            return original_read_text(self, *args, **kwargs)
+
+        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+        monkeypatch.setattr(Path, "read_text", _read_text)
+
+        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+        shell_tool = next(t for t in agent.agent.tools if isinstance(t, ShellTool))
+        skills = shell_tool.environment["skills"]
+        assert len(skills) == 1
+        assert skills[0]["name"] == "good-skill"
+
+
+class TestParseSkillDescription:
+    def test_unquoted_description(self):
+        content = "---\nname: my-skill\ndescription: A test skill\n---\nBody text."
+        assert _parse_skill_description(content) == "A test skill"
+
+    def test_double_quoted_description(self):
+        content = '---\nname: my-skill\ndescription: "A quoted skill"\n---\n'
+        assert _parse_skill_description(content) == "A quoted skill"
+
+    def test_single_quoted_description(self):
+        content = "---\nname: my-skill\ndescription: 'Single quoted'\n---\n"
+        assert _parse_skill_description(content) == "Single quoted"
+
+    def test_no_frontmatter(self):
+        content = "Just a plain markdown file."
+        assert _parse_skill_description(content) == ""
+
+    def test_no_description_field(self):
+        content = "---\nname: my-skill\n---\nBody."
+        assert _parse_skill_description(content) == ""
+
+    def test_unclosed_frontmatter(self):
+        content = "---\nname: my-skill\ndescription: never closed"
+        assert _parse_skill_description(content) == ""
+
+    def test_empty_description(self):
+        content = "---\nname: my-skill\ndescription:\n---\n"
+        assert _parse_skill_description(content) == ""
+
+    def test_description_with_colon_in_value(self):
+        content = "---\ndescription: Run this: do stuff\n---\n"
+        assert _parse_skill_description(content) == "Run this: do stuff"
+
+
+def _make_shell_request(commands: list[str], timeout_ms: int | None = None):
+    """Build a minimal object matching the ShellCommandRequest interface."""
+    from types import SimpleNamespace
+
+    action = SimpleNamespace(commands=commands, timeout_ms=timeout_ms)
+    data = SimpleNamespace(action=action)
+    return SimpleNamespace(data=data)
+
+
+class TestShellExecutor:
+    @pytest.mark.anyio
+    async def test_single_command_returns_stdout(self):
+        request = _make_shell_request(["echo hello"])
+        result = await _shell_executor(request)
+        assert result.strip() == "hello"
+
+    @pytest.mark.anyio
+    async def test_multiple_commands_combined(self):
+        request = _make_shell_request(["echo first", "echo second"])
+        result = await _shell_executor(request)
+        assert "first" in result
+        assert "second" in result
+        assert result.index("first") < result.index("second")
+
+    @pytest.mark.anyio
+    async def test_stderr_merged_into_stdout(self):
+        request = _make_shell_request(["echo err >&2"])
+        result = await _shell_executor(request)
+        assert result.strip() == "err"
+
+    @pytest.mark.anyio
+    async def test_command_timeout_kills_process(self):
+        request = _make_shell_request(["sleep 30"], timeout_ms=100)
+        result = await _shell_executor(request)
+        assert "timed out" in result.lower()
+
+    @pytest.mark.anyio
+    async def test_nonzero_exit_code_appends_exit_code(self):
+        request = _make_shell_request(["echo failing && exit 1"])
+        result = await _shell_executor(request)
+        assert "failing" in result
+        assert "[exit code: 1]" in result
+
+    @pytest.mark.anyio
+    async def test_zero_exit_code_no_suffix(self):
+        request = _make_shell_request(["echo ok"])
+        result = await _shell_executor(request)
+        assert "exit code" not in result
+
+    @pytest.mark.anyio
+    async def test_timeout_ms_none_uses_default(self):
+        """When timeout_ms is None, SHELL_TIMEOUT is used (command completes fine)."""
+        request = _make_shell_request(["echo ok"], timeout_ms=None)
+        result = await _shell_executor(request)
+        assert result.strip() == "ok"
+
+    @pytest.mark.anyio
+    async def test_timeout_stops_remaining_commands(self):
+        """After a timeout, subsequent commands are not executed."""
+        request = _make_shell_request(["sleep 30", "echo should-not-run"], timeout_ms=100)
+        result = await _shell_executor(request)
+        assert "timed out" in result.lower()
+        assert "should-not-run" not in result
+
+    @pytest.mark.anyio
+    async def test_subprocess_oserror_returns_error_message(self, monkeypatch):
+        """When create_subprocess_shell raises OSError, return error text instead of crashing."""
+        import asyncio as _asyncio
+
+        async def _failing_shell(*args, **kwargs):
+            raise OSError("fork failed")
+
+        monkeypatch.setattr(_asyncio, "create_subprocess_shell", _failing_shell)
+
+        request = _make_shell_request(["echo hello"])
+        result = await _shell_executor(request)
+        assert "fork failed" in result

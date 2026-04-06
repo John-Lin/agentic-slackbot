@@ -3,29 +3,46 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from agents import Agent
 from agents import Runner
+from agents import ShellCommandRequest
+from agents import ShellTool
+from agents import ShellToolLocalEnvironment
+from agents import ShellToolLocalSkill
 from agents import TResponseInputItem
 from agents.mcp import MCPServerStdio
 from agents.mcp import MCPServerStreamableHttp
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from agents.models.openai_responses import OpenAIResponsesModel
+from agents.tracing import set_tracing_disabled
 from openai import AsyncOpenAI
 
-DEFAULT_INSTRUCTIONS = (
-    "You are agentic Slack bot, a helpful assistant.\n"
-    "When responding, you must strictly use Slack's `mrkdwn` formatting syntax only.\n"
-    "Do not generate headings (`#`), tables, or any other Markdown features not supported by Slack.\n"
-    "Ensure that all output strictly complies with Slack's `mrkdwn` specifications.\n"
-    "Your answer must be precise, of high-quality, and written by an expert using an unbiased and journalistic tone.\n"
-    "Use the language specified by user in messages as the working language when explicitly provided.\n"
-    "If you need to use Mandarin, you MUST use Traditional Chinese (台灣繁體中文)"
-)
+INSTRUCTIONS_FILE = Path("instructions.md")
 
-MAX_TURNS = 25
+MAX_TURNS = 10
 MCP_SESSION_TIMEOUT_SECONDS = 30.0
+SHELL_TIMEOUT = 30.0
+SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
+
+set_tracing_disabled(True)
+
+
+def _load_instructions() -> str:
+    """Load agent instructions from ``instructions.md`` in the working directory.
+
+    Fails fast with a clear error if the file is missing, so misconfiguration
+    is caught immediately at startup.
+    """
+    try:
+        return INSTRUCTIONS_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"Instructions file not found: {INSTRUCTIONS_FILE.resolve()}. "
+            "Create or mount instructions.md with the agent system prompt."
+        ) from e
 
 
 def _get_model() -> OpenAIResponsesModel | OpenAIChatCompletionsModel:
@@ -47,20 +64,101 @@ def _get_model() -> OpenAIResponsesModel | OpenAIChatCompletionsModel:
     return OpenAIResponsesModel(model=model_name, openai_client=client)
 
 
+def _parse_skill_description(content: str) -> str:
+    """Return the description field from a SKILL.md YAML frontmatter, or ""."""
+    if not content.startswith("---"):
+        return ""
+    end = content.find("\n---", 3)
+    if end == -1:
+        return ""
+    for line in content[3:end].splitlines():
+        if line.startswith("description:"):
+            value = line[len("description:") :].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            return value
+    return ""
+
+
+def _load_shell_skills() -> list[ShellToolLocalSkill]:
+    """Discover local shell skills under SKILLS_DIR.
+
+    Each immediate subdirectory of SKILLS_DIR containing a SKILL.md is mounted
+    as a ShellToolLocalSkill. The skill name is the directory name; the
+    description is read from the SKILL.md YAML frontmatter.
+    """
+    if not SKILLS_DIR.is_dir():
+        return []
+    skills: list[ShellToolLocalSkill] = []
+    for skill_dir in sorted(SKILLS_DIR.iterdir()):
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_dir.is_dir() or not skill_md.is_file():
+            continue
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            logging.warning("Skipping unreadable skill file: %s", skill_md, exc_info=True)
+            continue
+        skills.append(
+            ShellToolLocalSkill(
+                name=skill_dir.name,
+                description=_parse_skill_description(content),
+                path=str(skill_dir),
+            )
+        )
+    return skills
+
+
+async def _shell_executor(request: ShellCommandRequest) -> str:
+    """Run each shell command from the request and return combined output.
+
+    Honours action.timeout_ms when set, otherwise falls back to SHELL_TIMEOUT.
+    stderr is merged into stdout for simplicity.
+    """
+    action = request.data.action
+    timeout = (action.timeout_ms / 1000.0) if action.timeout_ms is not None else SHELL_TIMEOUT
+
+    outputs: list[str] = []
+    for command in action.commands:
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+        except OSError as e:
+            outputs.append(f"Failed to run command: {command}: {e}")
+            break
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            output = stdout.decode("utf-8", errors="replace")
+            if proc.returncode:
+                output += f"\n[exit code: {proc.returncode}]"
+            outputs.append(output)
+        except TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            outputs.append(f"Command timed out after {timeout}s: {command}")
+            break
+    return "\n".join(outputs)
+
+
 class OpenAIAgent:
-    """A wrapper for OpenAI Agent with MCP server support."""
+    """A wrapper for OpenAI Agent with MCP server and local shell skill support."""
 
     def __init__(
         self,
         name: str,
+        instructions: str,
         mcp_servers: list | None = None,
-        instructions: str = DEFAULT_INSTRUCTIONS,
+        tools: list | None = None,
     ) -> None:
         self.agent = Agent(
             name=name,
             instructions=instructions,
             model=_get_model(),
             mcp_servers=(mcp_servers if mcp_servers is not None else []),
+            tools=(tools if tools is not None else []),
         )
         self.name = name
         self._conversations: dict[str, list[TResponseInputItem]] = {}
@@ -116,8 +214,15 @@ class OpenAIAgent:
                         },
                     )
                 )
-        instructions = config.get("instructions", DEFAULT_INSTRUCTIONS)
-        return cls(name, mcp_servers, instructions=instructions)
+        tools: list[Any] = []
+        if os.getenv("SHELL_SKILLS_ENABLED"):
+            skills = _load_shell_skills()
+            if skills:
+                environment = ShellToolLocalEnvironment(type="local", skills=skills)
+                tools.append(ShellTool(executor=_shell_executor, environment=environment))
+
+        instructions = _load_instructions()
+        return cls(name, instructions=instructions, mcp_servers=mcp_servers, tools=tools)
 
     async def connect(self) -> None:
         for mcp_server in self.agent.mcp_servers:
