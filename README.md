@@ -9,7 +9,7 @@ See also: [agentic-telegram-bot](https://github.com/John-Lin/agentic-telegram-bo
 - Channel @mention and DM support
 - Thread-aware conversations (follow-ups stay in the same thread)
 - Connects to any MCP server via `servers_config.json`
-- Supports OpenAI, Azure OpenAI, and OpenAI-compatible proxy endpoints
+- Supports OpenAI and OpenAI-compatible endpoints (including Azure OpenAI v1 API)
 - Per-conversation history with automatic truncation
 
 ## Install Dependencies
@@ -43,20 +43,12 @@ export OPENAI_API_KEY=""
 export OPENAI_MODEL="gpt-5.4"
 ```
 
-If you are using Azure OpenAI, set these instead:
+If you are using Azure OpenAI (v1 API) or another OpenAI-compatible endpoint:
 
 ```
-export AZURE_OPENAI_API_KEY=""
-export AZURE_OPENAI_ENDPOINT="https://<myopenai>.azure.com/"
+export OPENAI_API_KEY=""
+export OPENAI_BASE_URL="https://<resource-name>.openai.azure.com/openai/v1/"
 export OPENAI_MODEL="gpt-5.4"
-export OPENAI_API_VERSION="2025-03-01-preview"
-```
-
-If you are using an OpenAI-compatible proxy:
-
-```
-export OPENAI_PROXY_BASE_URL="https://my-proxy.example.com/v1"
-export OPENAI_PROXY_API_KEY=""
 ```
 
 Optional HTTP proxy for outbound requests:

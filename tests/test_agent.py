@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 import pytest
 from agents.models.interface import Model
-from openai import AsyncAzureOpenAI
+from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
+from agents.models.openai_responses import OpenAIResponsesModel
 
 from bot.agent import DEFAULT_INSTRUCTIONS
 from bot.agent import MAX_TURNS
@@ -162,47 +163,6 @@ class TestGetModel:
         with patch.dict("os.environ", env_vars, clear=True):
             return agent_module._get_model()
 
-    def test_azure_path_when_both_key_and_endpoint_set(self):
-        env = {
-            "AZURE_OPENAI_API_KEY": "test-azure-key",
-            "AZURE_OPENAI_ENDPOINT": "https://my-resource.openai.azure.com",
-        }
-        model = self._call_get_model(env)
-        assert isinstance(model._client, AsyncAzureOpenAI)
-
-    def test_azure_key_without_endpoint_does_not_use_azure(self):
-        """When AZURE_OPENAI_API_KEY is set but AZURE_OPENAI_ENDPOINT is missing,
-        should NOT enter the Azure path (and should not crash)."""
-        env = {
-            "AZURE_OPENAI_API_KEY": "test-azure-key",
-            "OPENAI_API_KEY": "fallback-key",
-        }
-        model = self._call_get_model(env)
-        assert not isinstance(model._client, AsyncAzureOpenAI)
-
-    def test_proxy_path_uses_base_url(self):
-        env = {
-            "OPENAI_PROXY_BASE_URL": "https://my-proxy.example.com/v1",
-            "OPENAI_PROXY_API_KEY": "proxy-key",
-        }
-        model = self._call_get_model(env)
-        assert not isinstance(model._client, AsyncAzureOpenAI)
-        assert str(model._client.base_url).rstrip("/") == "https://my-proxy.example.com/v1"
-
-    def test_proxy_path_without_api_key_uses_openai_key(self):
-        """Proxy base URL set but no proxy API key — should fall back to OPENAI_API_KEY."""
-        env = {
-            "OPENAI_PROXY_BASE_URL": "https://my-proxy.example.com/v1",
-            "OPENAI_API_KEY": "fallback-key",
-        }
-        model = self._call_get_model(env)
-        assert str(model._client.base_url).rstrip("/") == "https://my-proxy.example.com/v1"
-
-    def test_default_path_uses_vanilla_openai(self):
-        env = {"OPENAI_API_KEY": "test-key"}
-        model = self._call_get_model(env)
-        assert not isinstance(model._client, AsyncAzureOpenAI)
-
     def test_custom_model_name(self):
         env = {"OPENAI_MODEL": "gpt-5.2", "OPENAI_API_KEY": "test-key"}
         model = self._call_get_model(env)
@@ -212,6 +172,21 @@ class TestGetModel:
         env = {"OPENAI_API_KEY": "test-key"}
         model = self._call_get_model(env)
         assert model.model == "gpt-5.4"
+
+    def test_returns_responses_model_by_default(self):
+        env = {"OPENAI_API_KEY": "test-key"}
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIResponsesModel)
+
+    def test_returns_chat_completions_model_when_api_type_set(self):
+        env = {"OPENAI_API_KEY": "test-key", "OPENAI_API_TYPE": "chat_completions"}
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIChatCompletionsModel)
+
+    def test_returns_chat_completions_when_api_type_set(self):
+        env = {"OPENAI_API_KEY": "test-key", "OPENAI_API_TYPE": "chat_completions"}
+        model = self._call_get_model(env)
+        assert isinstance(model, OpenAIChatCompletionsModel)
 
 
 class TestFromDict:
