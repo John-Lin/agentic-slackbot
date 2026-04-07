@@ -1,5 +1,4 @@
 {
-  "instructions": "You are a helpful financial assistant. Help users look up stock data, news, and market information. Always include ticker symbols. Respond in the user's language. Keep responses concise for mobile reading. Do not offer follow-up suggestions or numbered options after answering.",
   "mcpServers": {
     "yfmcp": {
       "command": "uvx",

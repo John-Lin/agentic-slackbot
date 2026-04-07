@@ -15,6 +15,9 @@ wheels/
 servers_config.json
 *_servers_config.json
 
+# Agent instructions (use instructions.md.example as template)
+instructions.md
+
 # Local tooling config
 .claude/
 
