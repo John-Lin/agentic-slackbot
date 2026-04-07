@@ -17,10 +17,11 @@ from bot.agent import _shell_executor
 
 
 @pytest.fixture(autouse=True)
-def _mock_model(monkeypatch, tmp_path_factory):
-    """Prevent tests from constructing a real OpenAI client and isolate skills."""
+def _mock_model(monkeypatch):
+    """Prevent tests from constructing a real OpenAI client and isolate shell env vars."""
     monkeypatch.setattr("bot.agent._get_model", lambda: create_autospec(Model))
-    monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path_factory.mktemp("empty_skills"))
+    monkeypatch.delenv("SHELL_ENABLED", raising=False)
+    monkeypatch.delenv("SHELL_SKILLS_DIR", raising=False)
 
 
 class TestPerChannelConversations:
@@ -213,33 +214,49 @@ class TestFromDict:
 
 
 @pytest.mark.usefixtures("_stub_instructions")
-class TestLoadShellSkills:
+class TestShellToolConfiguration:
     def _get_shell_tools(self, agent: OpenAIAgent) -> list[ShellTool]:
         return [t for t in agent.agent.tools if isinstance(t, ShellTool)]
 
-    def _set_shell_mode(self, monkeypatch, mode: str | None) -> None:
-        if mode is None:
-            monkeypatch.delenv("SHELL_MODE", raising=False)
-            return
-        monkeypatch.setenv("SHELL_MODE", mode)
+    def _configure_env(self, monkeypatch, *, enabled: bool, skills_dir: Path | None = None) -> None:
+        if enabled:
+            monkeypatch.setenv("SHELL_ENABLED", "1")
+        else:
+            monkeypatch.delenv("SHELL_ENABLED", raising=False)
+        if skills_dir is not None:
+            monkeypatch.setenv("SHELL_SKILLS_DIR", str(skills_dir))
+        else:
+            monkeypatch.delenv("SHELL_SKILLS_DIR", raising=False)
 
-    def _make_skill_dir(self, tmp_path):
-        """Create a valid skill directory and return its parent."""
-        skill_dir = tmp_path / "my-skill"
+    def _make_skill(self, parent: Path, name: str, description: str = "desc") -> Path:
+        skill_dir = parent / name
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: A test skill\n---\n")
-        return tmp_path
+        (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {description}\n---\n")
+        return skill_dir
 
     def test_disabled_by_default(self, tmp_path, monkeypatch):
-        """Skills exist but shell is disabled, so no ShellTool is added."""
-        self._set_shell_mode(monkeypatch, None)
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", self._make_skill_dir(tmp_path))
+        """SHELL_ENABLED unset means no ShellTool, even if SHELL_SKILLS_DIR is set."""
+        self._make_skill(tmp_path, "my-skill")
+        self._configure_env(monkeypatch, enabled=False, skills_dir=tmp_path)
+
         agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+
         assert self._get_shell_tools(agent) == []
 
-    def test_shell_enabled_without_skills_adds_bare_shell_tool(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", self._make_skill_dir(tmp_path))
+    def test_orphaned_skills_dir_without_shell_enabled_warns(self, tmp_path, monkeypatch, caplog):
+        self._configure_env(monkeypatch, enabled=False, skills_dir=tmp_path)
+
+        with caplog.at_level("WARNING", logger="root"):
+            agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+
+        assert self._get_shell_tools(agent) == []
+        assert any(
+            "SHELL_SKILLS_DIR" in record.message and "SHELL_ENABLED" in record.message
+            for record in caplog.records
+        )
+
+    def test_shell_enabled_without_skills_dir_adds_bare_shell(self, tmp_path, monkeypatch):
+        self._configure_env(monkeypatch, enabled=True, skills_dir=None)
 
         agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
 
@@ -247,111 +264,84 @@ class TestLoadShellSkills:
         assert len(shell_tools) == 1
         assert shell_tools[0].environment == {"type": "local"}
 
-    def test_enabled_with_env_var(self, tmp_path, monkeypatch):
-        """SHELL_MODE=local_with_skills enables shell skills."""
-        self._set_shell_mode(monkeypatch, "local_with_skills")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", self._make_skill_dir(tmp_path))
-        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
-        shell_tools = self._get_shell_tools(agent)
-        assert len(shell_tools) == 1
-
-    def test_unknown_shell_mode_does_not_add_shell_tool(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "unknown")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", self._make_skill_dir(tmp_path))
+    def test_shell_enabled_with_skills_dir_mounts_skills(self, tmp_path, monkeypatch):
+        skill_dir = self._make_skill(tmp_path, "my-skill", description="A test skill")
+        self._configure_env(monkeypatch, enabled=True, skills_dir=tmp_path)
 
         agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
 
-        assert self._get_shell_tools(agent) == []
-
-    def test_no_shell_tool_when_skills_dir_missing(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local_with_skills")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path / "nonexistent")
-        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
-        shell_tools = self._get_shell_tools(agent)
-        assert len(shell_tools) == 1
-        assert shell_tools[0].environment == {"type": "local"}
-
-    def test_shell_tool_added_when_skill_found(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local_with_skills")
-        skill_dir = tmp_path / "my-skill"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: A test skill\n---\n")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
-
-        agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
         shell_tool = self._get_shell_tools(agent)[0]
         skill = shell_tool.environment["skills"][0]
         assert skill["name"] == "my-skill"
         assert skill["description"] == "A test skill"
         assert skill["path"] == str(skill_dir)
 
+    def test_skills_dir_missing_falls_back_to_bare_shell_with_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        self._configure_env(monkeypatch, enabled=True, skills_dir=tmp_path / "nonexistent")
+
+        with caplog.at_level("WARNING", logger="root"):
+            agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+
+        shell_tools = self._get_shell_tools(agent)
+        assert len(shell_tools) == 1
+        assert shell_tools[0].environment == {"type": "local"}
+        assert any("yielded no skills" in record.message for record in caplog.records)
+
     def test_multiple_skills_all_mounted(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local_with_skills")
-        for name in ["skill-a", "skill-b"]:
-            d = tmp_path / name
-            d.mkdir()
-            (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: desc {name}\n---\n")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+        self._make_skill(tmp_path, "skill-a")
+        self._make_skill(tmp_path, "skill-b")
+        self._configure_env(monkeypatch, enabled=True, skills_dir=tmp_path)
 
         agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+
         shell_tool = self._get_shell_tools(agent)[0]
         assert len(shell_tool.environment["skills"]) == 2
 
     def test_directory_without_skill_md_is_skipped(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local_with_skills")
         (tmp_path / "not-a-skill").mkdir()
-        good = tmp_path / "real-skill"
-        good.mkdir()
-        (good / "SKILL.md").write_text("---\nname: real-skill\ndescription: d\n---\n")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+        self._make_skill(tmp_path, "real-skill")
+        self._configure_env(monkeypatch, enabled=True, skills_dir=tmp_path)
 
         agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+
         shell_tool = self._get_shell_tools(agent)[0]
         skills = shell_tool.environment["skills"]
         assert len(skills) == 1
         assert skills[0]["name"] == "real-skill"
 
     def test_mcp_servers_and_shell_skills_coexist(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local_with_skills")
-        skill_dir = tmp_path / "s"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nname: s\ndescription: d\n---\n")
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+        self._make_skill(tmp_path, "s")
+        self._configure_env(monkeypatch, enabled=True, skills_dir=tmp_path)
 
         config = {"mcpServers": {"my-mcp": {"command": "uvx", "args": ["something"]}}}
         agent = OpenAIAgent.from_dict("test", config)
+
         assert len(agent.agent.mcp_servers) == 1
-        shell_tools = self._get_shell_tools(agent)
-        assert len(shell_tools) == 1
+        assert len(self._get_shell_tools(agent)) == 1
 
     def test_unreadable_utf8_skill_file_is_skipped(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local_with_skills")
         bad = tmp_path / "bad-skill"
         bad.mkdir()
         (bad / "SKILL.md").write_bytes(b"\xff\xfe\x00\x00")
-
-        good = tmp_path / "good-skill"
-        good.mkdir()
-        (good / "SKILL.md").write_text("---\nname: good-skill\ndescription: good\n---\n")
-
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
+        self._make_skill(tmp_path, "good-skill", description="good")
+        self._configure_env(monkeypatch, enabled=True, skills_dir=tmp_path)
 
         agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+
         shell_tool = self._get_shell_tools(agent)[0]
         skills = shell_tool.environment["skills"]
         assert len(skills) == 1
         assert skills[0]["name"] == "good-skill"
 
     def test_oserror_reading_skill_file_is_skipped(self, tmp_path, monkeypatch):
-        self._set_shell_mode(monkeypatch, "local_with_skills")
         bad = tmp_path / "bad-skill"
         bad.mkdir()
         bad_file = bad / "SKILL.md"
         bad_file.write_text("---\nname: bad\ndescription: bad\n---\n")
-
-        good = tmp_path / "good-skill"
-        good.mkdir()
-        (good / "SKILL.md").write_text("---\nname: good-skill\ndescription: good\n---\n")
+        self._make_skill(tmp_path, "good-skill", description="good")
+        self._configure_env(monkeypatch, enabled=True, skills_dir=tmp_path)
 
         original_read_text = Path.read_text
 
@@ -360,10 +350,10 @@ class TestLoadShellSkills:
                 raise OSError("permission denied")
             return original_read_text(self, *args, **kwargs)
 
-        monkeypatch.setattr("bot.agent.SKILLS_DIR", tmp_path)
         monkeypatch.setattr(Path, "read_text", _read_text)
 
         agent = OpenAIAgent.from_dict("test", {"mcpServers": {}})
+
         shell_tool = self._get_shell_tools(agent)[0]
         skills = shell_tool.environment["skills"]
         assert len(skills) == 1

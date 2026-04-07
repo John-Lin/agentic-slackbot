@@ -25,9 +25,6 @@ INSTRUCTIONS_FILE = Path("instructions.md")
 MAX_TURNS = 10
 MCP_SESSION_TIMEOUT_SECONDS = 30.0
 SHELL_TIMEOUT = 30.0
-SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
-SHELL_MODE_LOCAL = "local"
-SHELL_MODE_LOCAL_WITH_SKILLS = "local_with_skills"
 
 set_tracing_disabled(True)
 
@@ -82,17 +79,17 @@ def _parse_skill_description(content: str) -> str:
     return ""
 
 
-def _load_shell_skills() -> list[ShellToolLocalSkill]:
-    """Discover local shell skills under SKILLS_DIR.
+def _load_shell_skills(skills_dir: Path) -> list[ShellToolLocalSkill]:
+    """Discover local shell skills under ``skills_dir``.
 
-    Each immediate subdirectory of SKILLS_DIR containing a SKILL.md is mounted
-    as a ShellToolLocalSkill. The skill name is the directory name; the
-    description is read from the SKILL.md YAML frontmatter.
+    Each immediate subdirectory containing a ``SKILL.md`` file is mounted as a
+    ``ShellToolLocalSkill``. The skill name is the directory name; the
+    description is read from the ``SKILL.md`` YAML frontmatter.
     """
-    if not SKILLS_DIR.is_dir():
+    if not skills_dir.is_dir():
         return []
     skills: list[ShellToolLocalSkill] = []
-    for skill_dir in sorted(SKILLS_DIR.iterdir()):
+    for skill_dir in sorted(skills_dir.iterdir()):
         skill_md = skill_dir / "SKILL.md"
         if not skill_dir.is_dir() or not skill_md.is_file():
             continue
@@ -112,17 +109,34 @@ def _load_shell_skills() -> list[ShellToolLocalSkill]:
 
 
 def _get_shell_environment() -> ShellToolLocalEnvironment | None:
-    """Return the configured local shell environment, if enabled."""
-    shell_mode = os.getenv("SHELL_MODE")
-    if shell_mode == SHELL_MODE_LOCAL:
-        return {"type": "local"}
-    if shell_mode == SHELL_MODE_LOCAL_WITH_SKILLS:
-        environment: ShellToolLocalEnvironment = {"type": "local"}
-        skills = _load_shell_skills()
+    """Return the configured local shell environment, if enabled.
+
+    Controlled by two independent environment variables:
+
+    * ``SHELL_ENABLED`` — when truthy, the ``ShellTool`` is attached to the agent.
+    * ``SHELL_SKILLS_DIR`` — optional path; when set, skills discovered under it
+      are mounted alongside the shell. Ignored if ``SHELL_ENABLED`` is not set.
+    """
+    skills_dir_env = os.getenv("SHELL_SKILLS_DIR")
+    if not os.getenv("SHELL_ENABLED"):
+        if skills_dir_env:
+            logging.warning(
+                "SHELL_SKILLS_DIR=%r is set but SHELL_ENABLED is not; ignoring skills dir.",
+                skills_dir_env,
+            )
+        return None
+
+    environment: ShellToolLocalEnvironment = {"type": "local"}
+    if skills_dir_env:
+        skills = _load_shell_skills(Path(skills_dir_env))
         if skills:
             environment["skills"] = skills
-        return environment
-    return None
+        else:
+            logging.warning(
+                "SHELL_SKILLS_DIR=%r yielded no skills; attaching bare local shell.",
+                skills_dir_env,
+            )
+    return environment
 
 
 async def _shell_executor(request: ShellCommandRequest) -> str:
