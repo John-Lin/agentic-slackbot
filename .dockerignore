@@ -8,3 +8,4 @@ __pycache__
 servers_config.json
 .envrc
 .pre-commit-config.yaml
+skills/

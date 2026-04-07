@@ -126,6 +126,12 @@ uv run bot
 
 The bot can execute local shell commands via skills defined in a `skills/` directory. Each subdirectory containing a `SKILL.md` file is registered as a skill.
 
+When using the Docker image, mount `skills/` at runtime (the image build excludes this directory by default):
+
+```bash
+-v /path/to/skills:/app/skills:ro
+```
+
 This feature is **disabled by default**. To enable it, set:
 
 ```
@@ -154,7 +160,9 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
+  -e SHELL_SKILLS_ENABLED=1 \
   -v /path/to/instructions.md:/app/instructions.md \
+  -v /path/to/skills:/app/skills:ro \
   agentic-slackbot
 ```
 
@@ -167,7 +175,9 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
+  -e SHELL_SKILLS_ENABLED=1 \
   -v /path/to/instructions.md:/app/instructions.md \
+  -v /path/to/skills:/app/skills:ro \
   -v /path/to/servers_config.json:/app/servers_config.json \
   agentic-slackbot
 ```
