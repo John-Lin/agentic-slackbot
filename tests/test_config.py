@@ -5,6 +5,7 @@ import json
 import pytest
 
 from bot.config import Configuration
+from bot.config import env_flag
 
 
 @pytest.fixture()
@@ -64,3 +65,24 @@ class TestLoadConfig:
         config_file.write_text("not json")
         with pytest.raises(json.JSONDecodeError):
             Configuration.load_config(str(config_file))
+
+
+class TestEnvFlag:
+    def test_unset_is_false(self, monkeypatch):
+        monkeypatch.delenv("MY_FLAG", raising=False)
+        assert env_flag("MY_FLAG") is False
+
+    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+    def test_common_falsy_values(self, monkeypatch, value):
+        monkeypatch.setenv("MY_FLAG", value)
+        assert env_flag("MY_FLAG") is False
+
+    @pytest.mark.parametrize("value", ["FALSE", "No", "Off", "  0  "])
+    def test_case_insensitive_and_whitespace(self, monkeypatch, value):
+        monkeypatch.setenv("MY_FLAG", value)
+        assert env_flag("MY_FLAG") is False
+
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "on", "enabled", "anything"])
+    def test_truthy_values(self, monkeypatch, value):
+        monkeypatch.setenv("MY_FLAG", value)
+        assert env_flag("MY_FLAG") is True

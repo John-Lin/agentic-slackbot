@@ -9,7 +9,7 @@ See also: [agentic-telegram-bot](https://github.com/John-Lin/agentic-telegram-bo
 - Channel @mention and DM support
 - Thread-aware conversations (follow-ups stay in the same thread)
 - Connects to any MCP server via `servers_config.json`
-- Local shell skills via `ShellTool` (opt-in via `SHELL_SKILLS_ENABLED`)
+- Optional local shell via `ShellTool`, controlled by `SHELL_ENABLED` and `SHELL_SKILLS_DIR`
 - Supports OpenAI and OpenAI-compatible endpoints (including Azure OpenAI v1 API)
 - Per-conversation history with automatic truncation (last 10 turns)
 
@@ -43,8 +43,9 @@ export SLACK_APP_TOKEN=""
 export OPENAI_API_KEY=""
 export OPENAI_MODEL="gpt-5.4"
 
-# Shell skills (disabled by default)
-# export SHELL_SKILLS_ENABLED=1
+# Local shell (disabled by default)
+# export SHELL_ENABLED=1
+# export SHELL_SKILLS_DIR="./skills"  # optional; mount skills alongside the shell
 ```
 
 If you are using Azure OpenAI (v1 API) or another OpenAI-compatible endpoint:
@@ -59,6 +60,32 @@ Optional HTTP proxy for outbound requests:
 
 ```
 export HTTP_PROXY=""
+```
+
+Optional verbose OpenAI Agents SDK logging:
+
+```
+export AGENT_VERBOSE_LOG=1
+```
+
+`AGENT_VERBOSE_LOG` is defined by this project: when set to a truthy value, the app
+calls the SDK's `enable_verbose_stdout_logging()` helper during startup. Values like
+`0`, `false`, `no`, `off` (case-insensitive) are treated as disabled.
+
+The following are environment variables read directly by the OpenAI Agents SDK (not
+this project). By default, the SDK does not log model or tool payloads. To include
+them temporarily for debugging:
+
+```
+export OPENAI_AGENTS_DONT_LOG_MODEL_DATA=0
+export OPENAI_AGENTS_DONT_LOG_TOOL_DATA=0
+```
+
+These payload logs may contain sensitive data. Re-enable the defaults after debugging:
+
+```
+export OPENAI_AGENTS_DONT_LOG_MODEL_DATA=1
+export OPENAI_AGENTS_DONT_LOG_TOOL_DATA=1
 ```
 
 ## Agent Instructions
@@ -122,23 +149,34 @@ For local MCP servers, use `uv --directory`:
 uv run bot
 ```
 
-## Shell Skills (Optional)
+## Local Shell (Optional)
 
-The bot can execute local shell commands via skills defined in a `skills/` directory. Each subdirectory containing a `SKILL.md` file is registered as a skill.
+The bot can expose a local `ShellTool`. This is **disabled by default**. Enable it with:
 
-When using the Docker image, mount `skills/` at runtime (the image build excludes this directory by default):
+```
+export SHELL_ENABLED=1
+```
+
+With just `SHELL_ENABLED=1`, the agent gets bare local shell access with no pre-defined skills.
+
+### Shell Skills (Optional)
+
+You can optionally mount a skills directory alongside the shell. Each immediate subdirectory containing a `SKILL.md` file is registered as a skill and exposed to the agent as a hint (skills are advisory metadata — they do **not** sandbox command execution).
+
+```
+export SHELL_ENABLED=1
+export SHELL_SKILLS_DIR="./skills"
+```
+
+`SHELL_SKILLS_DIR` is ignored unless `SHELL_ENABLED` is set. If the directory is missing or contains no valid skills, the bot falls back to a bare shell and logs a warning.
+
+When using the Docker image, mount your skills directory at runtime (the image build excludes it by default):
 
 ```bash
 -v /path/to/skills:/app/skills:ro
 ```
 
-This feature is **disabled by default**. To enable it, set:
-
-```
-SHELL_SKILLS_ENABLED=1
-```
-
-Skills are auto-discovered at startup. The `SKILL.md` file should have YAML frontmatter with `name` and `description` fields:
+The `SKILL.md` file should have YAML frontmatter with `name` and `description` fields:
 
 ```markdown
 ---
@@ -160,7 +198,8 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
-  -e SHELL_SKILLS_ENABLED=1 \
+  -e SHELL_ENABLED=1 \
+  -e SHELL_SKILLS_DIR=/app/skills \
   -v /path/to/instructions.md:/app/instructions.md \
   -v /path/to/skills:/app/skills:ro \
   agentic-slackbot
@@ -175,7 +214,8 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
-  -e SHELL_SKILLS_ENABLED=1 \
+  -e SHELL_ENABLED=1 \
+  -e SHELL_SKILLS_DIR=/app/skills \
   -v /path/to/instructions.md:/app/instructions.md \
   -v /path/to/skills:/app/skills:ro \
   -v /path/to/servers_config.json:/app/servers_config.json \
