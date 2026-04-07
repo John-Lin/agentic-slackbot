@@ -65,11 +65,12 @@ export HTTP_PROXY=""
 Optional verbose OpenAI Agents SDK logging:
 
 ```
-export OPENAI_AGENTS_VERBOSE_LOGGING=1
+export AGENT_VERBOSE_LOG=1
 ```
 
-`OPENAI_AGENTS_VERBOSE_LOGGING` is defined by this project: when set, the app calls
-the SDK's `enable_verbose_stdout_logging()` helper during startup.
+`AGENT_VERBOSE_LOG` is defined by this project: when set to a truthy value, the app
+calls the SDK's `enable_verbose_stdout_logging()` helper during startup. Values like
+`0`, `false`, `no`, `off` (case-insensitive) are treated as disabled.
 
 The following are environment variables read directly by the OpenAI Agents SDK (not
 this project). By default, the SDK does not log model or tool payloads. To include

@@ -20,6 +20,8 @@ from agents.models.openai_responses import OpenAIResponsesModel
 from agents.tracing import set_tracing_disabled
 from openai import AsyncOpenAI
 
+from .config import env_flag
+
 INSTRUCTIONS_FILE = Path("instructions.md")
 
 MAX_TURNS = 10
@@ -118,7 +120,7 @@ def _get_shell_environment() -> ShellToolLocalEnvironment | None:
       are mounted alongside the shell. Ignored if ``SHELL_ENABLED`` is not set.
     """
     skills_dir_env = os.getenv("SHELL_SKILLS_DIR")
-    if not os.getenv("SHELL_ENABLED"):
+    if not env_flag("SHELL_ENABLED"):
         if skills_dir_env:
             logging.warning(
                 "SHELL_SKILLS_DIR=%r is set but SHELL_ENABLED is not; ignoring skills dir.",

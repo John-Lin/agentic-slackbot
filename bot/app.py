@@ -1,11 +1,11 @@
 import asyncio
 import logging
-import os
 
 from agents import enable_verbose_stdout_logging
 
 from .agent import OpenAIAgent
 from .config import Configuration
+from .config import env_flag
 from .slack import SlackMCPBot
 
 
@@ -14,7 +14,7 @@ def _configure_logging() -> None:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=logging.INFO,
     )
-    if os.getenv("OPENAI_AGENTS_VERBOSE_LOGGING"):
+    if env_flag("AGENT_VERBOSE_LOG"):
         enable_verbose_stdout_logging()
 
 
