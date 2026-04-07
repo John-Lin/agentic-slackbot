@@ -26,6 +26,8 @@ MAX_TURNS = 10
 MCP_SESSION_TIMEOUT_SECONDS = 30.0
 SHELL_TIMEOUT = 30.0
 SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
+SHELL_MODE_LOCAL = "local"
+SHELL_MODE_LOCAL_WITH_SKILLS = "local_with_skills"
 
 set_tracing_disabled(True)
 
@@ -107,6 +109,20 @@ def _load_shell_skills() -> list[ShellToolLocalSkill]:
             )
         )
     return skills
+
+
+def _get_shell_environment() -> ShellToolLocalEnvironment | None:
+    """Return the configured local shell environment, if enabled."""
+    shell_mode = os.getenv("SHELL_MODE")
+    if shell_mode == SHELL_MODE_LOCAL:
+        return {"type": "local"}
+    if shell_mode == SHELL_MODE_LOCAL_WITH_SKILLS:
+        environment: ShellToolLocalEnvironment = {"type": "local"}
+        skills = _load_shell_skills()
+        if skills:
+            environment["skills"] = skills
+        return environment
+    return None
 
 
 async def _shell_executor(request: ShellCommandRequest) -> str:
@@ -215,11 +231,9 @@ class OpenAIAgent:
                     )
                 )
         tools: list[Any] = []
-        if os.getenv("SHELL_SKILLS_ENABLED"):
-            skills = _load_shell_skills()
-            if skills:
-                environment = ShellToolLocalEnvironment(type="local", skills=skills)
-                tools.append(ShellTool(executor=_shell_executor, environment=environment))
+        environment = _get_shell_environment()
+        if environment is not None:
+            tools.append(ShellTool(executor=_shell_executor, environment=environment))
 
         instructions = _load_instructions()
         return cls(name, instructions=instructions, mcp_servers=mcp_servers, tools=tools)

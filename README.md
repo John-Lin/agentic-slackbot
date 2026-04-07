@@ -9,7 +9,7 @@ See also: [agentic-telegram-bot](https://github.com/John-Lin/agentic-telegram-bo
 - Channel @mention and DM support
 - Thread-aware conversations (follow-ups stay in the same thread)
 - Connects to any MCP server via `servers_config.json`
-- Local shell skills via `ShellTool` (opt-in via `SHELL_SKILLS_ENABLED`)
+- Optional local shell via `ShellTool`, controlled by `SHELL_MODE`
 - Supports OpenAI and OpenAI-compatible endpoints (including Azure OpenAI v1 API)
 - Per-conversation history with automatic truncation (last 10 turns)
 
@@ -43,8 +43,9 @@ export SLACK_APP_TOKEN=""
 export OPENAI_API_KEY=""
 export OPENAI_MODEL="gpt-5.4"
 
-# Shell skills (disabled by default)
-# export SHELL_SKILLS_ENABLED=1
+# Local shell mode (disabled by default)
+# export SHELL_MODE="local"
+# export SHELL_MODE="local_with_skills"
 ```
 
 If you are using Azure OpenAI (v1 API) or another OpenAI-compatible endpoint:
@@ -59,6 +60,29 @@ Optional HTTP proxy for outbound requests:
 
 ```
 export HTTP_PROXY=""
+```
+
+Optional verbose OpenAI Agents SDK logging in this project:
+
+```
+export OPENAI_AGENTS_VERBOSE_LOGGING=1
+```
+
+When this project-specific environment variable is set, the app enables the SDK's
+`enable_verbose_stdout_logging()` helper during startup.
+
+By default, the SDK does not log model or tool payloads. To include them temporarily for debugging:
+
+```
+export OPENAI_AGENTS_DONT_LOG_MODEL_DATA=0
+export OPENAI_AGENTS_DONT_LOG_TOOL_DATA=0
+```
+
+These payload logs may contain sensitive data. Re-enable the defaults after debugging:
+
+```
+export OPENAI_AGENTS_DONT_LOG_MODEL_DATA=1
+export OPENAI_AGENTS_DONT_LOG_TOOL_DATA=1
 ```
 
 ## Agent Instructions
@@ -122,9 +146,19 @@ For local MCP servers, use `uv --directory`:
 uv run bot
 ```
 
+## Local Shell (Optional)
+
+The bot can expose a local `ShellTool` when enabled:
+
+```
+SHELL_MODE=local
+```
+
+With `SHELL_MODE=local`, the bot gets bare local shell access without any mounted skills.
+
 ## Shell Skills (Optional)
 
-The bot can execute local shell commands via skills defined in a `skills/` directory. Each subdirectory containing a `SKILL.md` file is registered as a skill.
+If you also want local shell skills, define them in a `skills/` directory. Each subdirectory containing a `SKILL.md` file is registered as a skill.
 
 When using the Docker image, mount `skills/` at runtime (the image build excludes this directory by default):
 
@@ -132,10 +166,10 @@ When using the Docker image, mount `skills/` at runtime (the image build exclude
 -v /path/to/skills:/app/skills:ro
 ```
 
-This feature is **disabled by default**. To enable it, set:
+Shell skills are **disabled by default**. To enable them, set:
 
 ```
-SHELL_SKILLS_ENABLED=1
+SHELL_MODE=local_with_skills
 ```
 
 Skills are auto-discovered at startup. The `SKILL.md` file should have YAML frontmatter with `name` and `description` fields:
@@ -160,7 +194,7 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
-  -e SHELL_SKILLS_ENABLED=1 \
+  -e SHELL_MODE="local_with_skills" \
   -v /path/to/instructions.md:/app/instructions.md \
   -v /path/to/skills:/app/skills:ro \
   agentic-slackbot
@@ -175,7 +209,7 @@ docker run -d \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
   -e OPENAI_MODEL="gpt-5.4" \
-  -e SHELL_SKILLS_ENABLED=1 \
+  -e SHELL_MODE="local_with_skills" \
   -v /path/to/instructions.md:/app/instructions.md \
   -v /path/to/skills:/app/skills:ro \
   -v /path/to/servers_config.json:/app/servers_config.json \
