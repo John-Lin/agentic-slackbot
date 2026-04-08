@@ -3,25 +3,13 @@ import logging
 import os
 from typing import Any
 
+from agent_core.env import env_flag
 from dotenv import find_dotenv
 from dotenv import load_dotenv
 
+__all__ = ["Configuration", "env_flag"]
+
 logger = logging.getLogger(__name__)
-
-_FALSY_ENV_VALUES = frozenset({"", "0", "false", "no", "off"})
-
-
-def env_flag(name: str) -> bool:
-    """Return True if env var ``name`` is set to a truthy value.
-
-    Common falsy spellings (empty, "0", "false", "no", "off") are treated as
-    disabled so that ``FOO=0`` behaves as users intuitively expect rather than
-    as Python's default "non-empty string is truthy" rule.
-    """
-    raw = os.getenv(name)
-    if raw is None:
-        return False
-    return raw.strip().lower() not in _FALSY_ENV_VALUES
 
 
 class Configuration:

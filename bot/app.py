@@ -1,9 +1,9 @@
 import asyncio
 import logging
 
+from agent_core import OpenAIAgent
 from agents import enable_verbose_stdout_logging
 
-from .agent import OpenAIAgent
 from .config import Configuration
 from .config import env_flag
 from .slack import SlackMCPBot

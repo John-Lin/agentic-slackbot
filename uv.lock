@@ -3,10 +3,20 @@ revision = 3
 requires-python = ">=3.14"
 
 [[package]]
+name = "agent-core"
+version = "0.1.0"
+source = { git = "https://github.com/John-Lin/agent-core.git#5f1684204fed67dcfb9b41ad945fb4672538de45" }
+dependencies = [
+    { name = "openai-agents" },
+    { name = "python-dotenv" },
+]
+
+[[package]]
 name = "agentic-slackbot"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "agent-core" },
     { name = "aiohttp" },
     { name = "openai-agents" },
     { name = "python-dotenv" },
@@ -24,6 +34,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-core", git = "https://github.com/John-Lin/agent-core.git" },
     { name = "aiohttp", specifier = ">=3.11.0" },
     { name = "openai-agents", specifier = ">=0.13.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
