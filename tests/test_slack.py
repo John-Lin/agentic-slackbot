@@ -174,6 +174,101 @@ class TestHandleMessage:
 
         bot.agent.run.assert_not_called()
 
+    @pytest.mark.anyio
+    async def test_thread_followup_without_mention_is_ignored(self, bot):
+        """A plain (non-@mention) message in a thread is ignored, even if the
+        same user previously @mentioned the bot in that thread. Every turn
+        requires an explicit mention.
+        """
+        # First turn: user @mentions in thread.
+        mention_event = {
+            "channel": "C001",
+            "user": "U123",
+            "text": "<@U_BOT> first question",
+            "thread_ts": "1111111111.111111",
+            "ts": "1111111111.111111",
+        }
+        await bot.handle_mention(mention_event, AsyncMock(), AsyncMock())
+        assert bot.agent.run.call_count == 1
+
+        # Second turn: same user, same thread, no @mention — should be ignored.
+        followup = {
+            "channel": "C001",
+            "channel_type": "channel",
+            "user": "U123",
+            "text": "follow up without mention",
+            "thread_ts": "1111111111.111111",
+            "ts": "2222222222.222222",
+        }
+        await bot.handle_message(followup, AsyncMock(), AsyncMock())
+
+        # Still only the original mention call.
+        assert bot.agent.run.call_count == 1
+
+
+class TestMultiUserThread:
+    @pytest.mark.anyio
+    async def test_second_user_mention_in_same_thread_shares_history(self, bot):
+        """When a second user joins a thread by @mentioning the bot, they engage
+        the same conversation key (thread_ts) so the bot has shared history.
+        """
+        thread_ts = "1111111111.111111"
+
+        alice_mention = {
+            "channel": "C001",
+            "user": "U_ALICE",
+            "text": "<@U_BOT> what is the capital of France?",
+            "thread_ts": thread_ts,
+            "ts": thread_ts,
+        }
+        bob_mention = {
+            "channel": "C001",
+            "user": "U_BOB",
+            "text": "<@U_BOT> and Germany?",
+            "thread_ts": thread_ts,
+            "ts": "2222222222.222222",
+        }
+
+        await bot.handle_mention(alice_mention, AsyncMock(), AsyncMock())
+        await bot.handle_mention(bob_mention, AsyncMock(), AsyncMock())
+
+        # Both calls used the same thread_ts as the conversation key.
+        assert bot.agent.run.call_count == 2
+        assert bot.agent.run.call_args_list[0].args[0] == thread_ts
+        assert bot.agent.run.call_args_list[1].args[0] == thread_ts
+
+    @pytest.mark.anyio
+    async def test_second_user_plain_message_in_thread_is_ignored(self, bot):
+        """A second user typing a plain (non-@mention) message in an active
+        thread is ignored — they must @mention to participate.
+        """
+        thread_ts = "1111111111.111111"
+
+        # Alice opens the thread with a mention.
+        alice_mention = {
+            "channel": "C001",
+            "user": "U_ALICE",
+            "text": "<@U_BOT> hi",
+            "thread_ts": thread_ts,
+            "ts": thread_ts,
+        }
+        await bot.handle_mention(alice_mention, AsyncMock(), AsyncMock())
+        assert bot.agent.run.call_count == 1
+
+        # Bob types in the thread without mentioning the bot.
+        bob_plain = {
+            "channel": "C001",
+            "channel_type": "channel",
+            "user": "U_BOB",
+            "text": "hey what's going on",
+            "thread_ts": thread_ts,
+            "ts": "2222222222.222222",
+        }
+        await bot.handle_message(bob_plain, AsyncMock(), AsyncMock())
+
+        # Bob's plain message did not trigger the bot.
+        assert bot.agent.run.call_count == 1
+
 
 class TestErrorHandling:
     @pytest.mark.anyio
