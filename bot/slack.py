@@ -34,10 +34,6 @@ class SlackMCPBot:
         self.agent = openai_agent
         self._user_name_cache: dict[str, str] = {}
 
-        # Maps thread_ts to the user_id who first @mentioned the bot, so only
-        # that user's follow-up messages in the thread are handled without a mention.
-        self.active_threads: dict[str, str] = {}
-
         # Set up event handlers
         self.app.event("app_mention")(self.handle_mention)
         self.app.event("message")(self.handle_message)
@@ -58,33 +54,21 @@ class SlackMCPBot:
             self.bot_id = None
 
     async def handle_mention(self, event, say, ack):
-        """Handle mentions of the bot in channels."""
+        """Handle mentions of the bot in channels and threads."""
         await ack()
-        thread_ts = event.get("thread_ts", event.get("ts"))
-        user_id = event.get("user")
-        if thread_ts not in self.active_threads and user_id:
-            self.active_threads[thread_ts] = user_id
         await self._process_message(event, say)
 
     async def handle_message(self, message, say, ack):
-        """Handle direct messages and follow-up messages in active threads."""
+        """Handle direct messages. Channel and thread messages must @mention
+        the bot and are handled by ``handle_mention`` via the ``app_mention``
+        event — every turn in a thread requires an explicit mention, regardless
+        of who started the thread.
+        """
         await ack()
         if message.get("subtype"):
             return
 
-        channel_type = message.get("channel_type")
-        thread_ts = message.get("thread_ts")
-
-        is_dm = channel_type == "im"
-        # Respond only to the user who first @mentioned the bot in this thread,
-        # and skip messages that @mention the bot (handle_mention handles those).
-        is_active_thread_followup = (
-            thread_ts is not None
-            and self.active_threads.get(thread_ts) == message.get("user")
-            and not self._is_bot_mentioned(message)
-        )
-
-        if is_dm or is_active_thread_followup:
+        if message.get("channel_type") == "im":
             await self._process_message(message, say)
 
     async def _get_display_name(self, user_id: str) -> str:
@@ -98,11 +82,6 @@ class SlackMCPBot:
             name = user_id
         self._user_name_cache[user_id] = name
         return name
-
-    def _is_bot_mentioned(self, message) -> bool:
-        if not getattr(self, "bot_id", None):
-            return False
-        return f"<@{self.bot_id}>" in message.get("text", "")
 
     async def _process_message(self, event, say):
         """Process incoming messages and generate responses."""
