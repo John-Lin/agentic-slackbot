@@ -41,7 +41,6 @@ Create a `.envrc` or `.env` file in the root directory:
 export SLACK_BOT_TOKEN=""
 export SLACK_APP_TOKEN=""
 export OPENAI_API_KEY=""
-export OPENAI_MODEL="gpt-5.4"
 
 # Local shell (disabled by default)
 # export SHELL_ENABLED=1
@@ -53,7 +52,6 @@ If you are using Azure OpenAI (v1 API) or another OpenAI-compatible endpoint:
 ```
 export OPENAI_API_KEY=""
 export OPENAI_BASE_URL="https://<resource-name>.openai.azure.com/openai/v1/"
-export OPENAI_MODEL="gpt-5.4"
 ```
 
 Optional HTTP proxy for outbound requests:
@@ -106,6 +104,7 @@ Create a `servers_config.json` file to add your MCP servers. If this file is not
 
 ```json
 {
+  "model": "gpt-5.4",
   "mcpServers": {
     "my-server": {
       "command": "uvx",
@@ -114,6 +113,8 @@ Create a `servers_config.json` file to add your MCP servers. If this file is not
   }
 }
 ```
+
+`model` is optional and defaults to `gpt-5.4`. Each MCP server also accepts `timeout` (seconds, default `30.0`) and `enabled` (default `true`).
 
 For HTTP-based MCP servers (Streamable HTTP), use `url`:
 
@@ -197,7 +198,6 @@ docker run -d \
   -e SLACK_BOT_TOKEN="" \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
-  -e OPENAI_MODEL="gpt-5.4" \
   -e SHELL_ENABLED=1 \
   -e SHELL_SKILLS_DIR=/app/skills \
   -v /path/to/instructions.md:/app/instructions.md \
@@ -213,7 +213,6 @@ docker run -d \
   -e SLACK_BOT_TOKEN="" \
   -e SLACK_APP_TOKEN="" \
   -e OPENAI_API_KEY="" \
-  -e OPENAI_MODEL="gpt-5.4" \
   -e SHELL_ENABLED=1 \
   -e SHELL_SKILLS_DIR=/app/skills \
   -v /path/to/instructions.md:/app/instructions.md \
