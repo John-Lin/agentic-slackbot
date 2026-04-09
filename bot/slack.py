@@ -101,10 +101,13 @@ class SlackMCPBot:
             display_name = await self._get_display_name(user_id)
             user_text = f"[{display_name}] {user_text}"
 
+        # DMs use the channel ID as session key so all messages share one conversation.
+        # Threads use thread_ts so each thread has its own isolated conversation.
         thread_ts = event.get("thread_ts", event.get("ts"))
+        session_key = event["channel"] if event.get("channel_type") == "im" else thread_ts
 
         try:
-            asst_text = await self.agent.run(thread_ts, user_text)
+            asst_text = await self.agent.run(session_key, user_text)
             mrkdwn_text = markdown_to_slack_mrkdwn(str(asst_text))
             try:
                 await say(text=mrkdwn_text, channel=channel, thread_ts=thread_ts)
