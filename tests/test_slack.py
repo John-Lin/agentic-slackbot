@@ -110,7 +110,8 @@ class TestHandleMention:
 
 class TestHandleMessage:
     @pytest.mark.anyio
-    async def test_dm_calls_agent(self, bot):
+    async def test_dm_uses_channel_as_session_key(self, bot):
+        """DM messages must use channel ID as session key so consecutive messages share history."""
         message = {
             "channel": "D001",
             "channel_type": "im",
@@ -123,7 +124,23 @@ class TestHandleMessage:
 
         await bot.handle_message(message, say, ack)
 
-        bot.agent.run.assert_called_once_with("1234567890.123456", "[Alice] hello")
+        bot.agent.run.assert_called_once_with("D001", "[Alice] hello")
+
+    @pytest.mark.anyio
+    async def test_dm_consecutive_messages_share_session(self, bot):
+        """Two consecutive DM messages must use the same session key."""
+        say = AsyncMock()
+        ack = AsyncMock()
+
+        for ts in ("1111.111", "2222.222"):
+            await bot.handle_message(
+                {"channel": "D001", "channel_type": "im", "user": "U123", "text": "msg", "ts": ts},
+                say,
+                ack,
+            )
+
+        keys = [call.args[0] for call in bot.agent.run.call_args_list]
+        assert keys[0] == keys[1] == "D001"
 
     @pytest.mark.anyio
     async def test_non_dm_is_ignored(self, bot):
