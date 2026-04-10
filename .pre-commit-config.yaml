@@ -11,11 +11,14 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
+  - repo: local
     hooks:
-      - id: mypy
-        args: [--install-types, --non-interactive]
+      - id: ty
+        name: ty
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.5.15
     hooks:

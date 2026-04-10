@@ -8,7 +8,7 @@ fix:
 	uv run ruff check --fix .
 
 type:
-	uv run mypy --install-types --non-interactive .
+	uv run ty check
 
 test:
 	uv run pytest -v -s --cov=bot tests

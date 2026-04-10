@@ -20,6 +20,6 @@ jobs:
       - name: Lint
         run: uv run ruff check .
       - name: Type check
-        run: uv run mypy --install-types --non-interactive .
+        run: uv run ty check
       - name: Test
         run: uv run pytest -v --cov=bot tests/

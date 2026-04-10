@@ -21,7 +21,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.13.0",
+    "ty>=0.0.29",
     "pytest>=8.3.3",
     "pytest-cov>=6.0.0",
     "ruff>=0.7.3",
@@ -50,9 +50,6 @@ select = [
 
 [tool.ruff.lint.isort]
 force-single-line = true
-
-[tool.mypy]
-ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
